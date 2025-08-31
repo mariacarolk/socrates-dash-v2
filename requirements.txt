@@ -1,6 +1,8 @@
 # Build dependencies primeiro
 setuptools==68.2.2
 wheel==0.41.2
+xlsxwriter==3.1.2
+openpyxl==3.1.2
 
 # Framework web
 flask==2.3.3
