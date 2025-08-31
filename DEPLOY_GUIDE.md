@@ -182,6 +182,52 @@ Se você recebeu erro de compilação do pandas no Render, use uma dessas soluç
 - **CSV não persiste:** Usar banco de dados em produção
 
 ### **Melhorias Futuras:**
-- Migrar CSV para PostgreSQL (Render oferece grátis)
+- ✅ Migrar CSV para PostgreSQL (implementado!)
 - Implementar cache Redis
 - Otimizar para múltiplos workers
+
+---
+
+## 🐘 **VERSÃO COM POSTGRESQL - PERSISTÊNCIA TOTAL**
+
+### **✅ Implementado:**
+- **`database.py`** - Gerenciador PostgreSQL
+- **Migração automática** CSV → PostgreSQL
+- **Fallback inteligente** para CSV se necessário
+- **Todas as operações** CRUD funcionam
+
+### **🚀 Para Ativar PostgreSQL no Railway:**
+
+1. **No Dashboard Railway:**
+   - Clique **"Add Service"**
+   - Selecione **"Database" → "PostgreSQL"**
+   - Railway cria `DATABASE_URL` automaticamente
+
+2. **Re-deploy:**
+   ```bash
+   git add .
+   git commit -m "Add PostgreSQL support"
+   git push origin main
+   ```
+
+3. **Verificar Logs:**
+   - Deve aparecer: **"🐘 Usando PostgreSQL para persistência"**
+   - Migração automática dos dados do CSV
+
+### **🎯 Resultado:**
+- ✅ **Edições persistem** permanentemente
+- ✅ **Zero perda de dados** 
+- ✅ **Performance melhor**
+- ✅ **Backup automático** (Railway)
+
+### **🔑 Sobre SECRET_KEY:**
+
+**Por que funcionou sem SECRET_KEY?**
+- Flask gera uma chave temporária automática
+- **Problema**: Muda a cada restart
+- **Consequência**: Usuários são deslogados
+- **Solução**: Sempre definir SECRET_KEY fixa
+
+**Para adicionar no Railway:**
+1. Dashboard → Variables
+2. Adicionar: `SECRET_KEY` = `6a5bb56c77797ae84352a9043ab0b7e04a8a86530cbc74f388b63607d99741fb`
