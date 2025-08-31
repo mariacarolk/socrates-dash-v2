@@ -648,9 +648,13 @@ def associate_cities_to_data():
                     except:
                         continue
             
+            # Atualizar o item original com a cidade encontrada
+            item['Cidade'] = cidade_encontrada if cidade_encontrada else 'Não encontrada'
+            
+            # Criar item para display (com valores formatados)
             associated_item = {
                 'Circo': circo,
-                'Cidade': cidade_encontrada if cidade_encontrada else 'Não encontrada',
+                'Cidade': item['Cidade'],
                 'Data Evento': data_evento_str,
                 'Faturamento Total': processor.format_currency_display(item['Faturamento Total']),
                 'Faturamento Gestão Produtor': processor.format_currency_display(item['Faturamento Gestão Produtor']),
@@ -659,6 +663,10 @@ def associate_cities_to_data():
             }
             
             associated_data.append(associated_item)
+        
+        # IMPORTANTE: Salvar dados atualizados com cidades de volta no cache
+        save_dados_to_cache(dados_para_associar)
+        print(f"💾 Dados com cidades salvos no cache: {len(dados_para_associar)} registros")
         
         return jsonify({
             'success': True,
@@ -685,12 +693,15 @@ def generate_report():
         
         # Usar dados do cache para gerar relatórios reais
         dados_para_relatorio = get_dados_from_cache()
+        print(f"🗃️ Dados do cache: {len(dados_para_relatorio) if dados_para_relatorio else 0} registros")
         
         if not dados_para_relatorio:
             # Tentar recuperar dados processados em memória
+            print(f"📋 Dados em processor.processed_data: {len(processor.processed_data) if processor.processed_data else 0} registros")
             if processor.processed_data:
                 dados_para_relatorio = processor.processed_data
             else:
+                print("❌ Nenhum dado encontrado no cache ou no processor")
                 return jsonify({'success': False, 'message': 'Importe um arquivo Excel primeiro para gerar relatórios'})
         
         # Garantir que o processor tenha os dados
