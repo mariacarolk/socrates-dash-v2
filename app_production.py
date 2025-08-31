@@ -532,42 +532,10 @@ def generate_report():
         if data_inicio > data_fim:
             return jsonify({'success': False, 'message': 'Data inicial deve ser anterior à data final'})
         
-        # Para produção, criar relatório demo baseado nos dados do cache
-        circos_cache = get_circos_from_cache()
-        
-        if tipo_filtro == 'circo':
-            selected_circos = data.get('circos', [])
-            if not selected_circos:
-                return jsonify({'success': False, 'message': 'Selecione pelo menos um circo'})
-            
-            # Criar relatório demo por circo
-            report_data = []
-            for circo in selected_circos:
-                if circo in circos_cache:
-                    report_data.append({
-                        'Circo': circo,
-                        'Período': f"{data_inicio.strftime('%d/%m/%Y')} - {data_fim.strftime('%d/%m/%Y')}",
-                        'Faturamento Total': 50000.00,
-                        'Faturamento Gestão Produtor': 10000.00,
-                        'Taxas e Descontos': 2000.00,
-                        'Valor Líquido': 38000.00
-                    })
-        else:
-            # Relatório por cidade
-            selected_cidades = data.get('cidades', [])
-            if not selected_cidades:
-                return jsonify({'success': False, 'message': 'Selecione pelo menos uma cidade'})
-            
-            report_data = []
-            for cidade in selected_cidades:
-                report_data.append({
-                    'Circo': cidade,  # Usar cidade como label
-                    'Período': f"{data_inicio.strftime('%d/%m/%Y')} - {data_fim.strftime('%d/%m/%Y')}",
-                    'Faturamento Total': 45000.00,
-                    'Faturamento Gestão Produtor': 9000.00,
-                    'Taxas e Descontos': 1800.00,
-                    'Valor Líquido': 34200.00
-                })
+        return jsonify({
+            'success': False, 
+            'message': 'Relatórios com dados reais disponíveis apenas na versão local. Esta é uma versão demo online.'
+        })
         
         if not report_data:
             return jsonify({'success': False, 'message': 'Nenhum dado encontrado para os filtros selecionados'})

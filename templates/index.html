@@ -948,6 +948,12 @@
             document.getElementById('metricLiquido').textContent = data.stats.total_liquido;
             document.getElementById('metricCircos').textContent = data.stats.total_circos;
             
+            // Atualizar label da métrica baseado no tipo de filtro
+            const metricLabel = document.querySelector('#metricCircos').parentElement.querySelector('p');
+            if (data.stats.label_tipo) {
+                metricLabel.textContent = data.stats.label_tipo;
+            }
+            
             // Update table header and title
             const tableHeader = document.querySelector('#reportTableBody').closest('.card').querySelector('.card-header h5');
             tableHeader.innerHTML = `<i class="bi bi-table me-2"></i>Detalhamento por ${labelType}`;

@@ -860,7 +860,8 @@ def generate_report():
                 'total_gestao': processor.format_currency_display(total_gestao),
                 'total_taxas': processor.format_currency_display(total_taxas),
                 'total_liquido': processor.format_currency_display(total_liquido),
-                'total_circos': len(report_data)
+                'total_circos': len(report_data),
+                'label_tipo': 'Cidades' if tipo_filtro == 'cidade' else 'Circos'
             }
         }
         
