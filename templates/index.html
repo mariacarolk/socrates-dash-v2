@@ -1328,6 +1328,23 @@
             console.log(`Tabela de dados com cidades preenchida com ${associatedData.length} registros`);
         }
 
+        // Inicialização ao carregar a página
+        window.addEventListener('load', function() {
+            console.log('🚀 Página carregada, iniciando aplicação...');
+            
+            // Carregar dados de circos e cidades
+            loadCircosCrud();
+            
+            // Popular filtro de cidades
+            setTimeout(() => {
+                populateCidadesSelect();
+            }, 500); // Pequeno delay para garantir que os dados foram carregados
+            
+            // Configurar visibilidade inicial dos filtros
+            document.getElementById('circosSelect').closest('.col-md-4').style.display = 'block';
+            document.getElementById('cidadesSelect').closest('.col-md-4').style.display = 'none';
+        });
+
     </script>
 </body>
 </html>
