@@ -2,13 +2,16 @@ services:
   - type: web
     name: socrates-online
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python app_production.py
+    runtime: python-3.11.7
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn app_production:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     envVars:
       - key: FLASK_ENV
         value: production
       - key: SECRET_KEY
-        generateValue: true
+        value: 6a5bb56c77797ae84352a9043ab0b7e04a8a86530cbc74f388b63607d99741fb
+      - key: PYTHONPATH
+        value: /opt/render/project/src
     disk:
       name: socrates-data
       mountPath: /opt/render/project/src

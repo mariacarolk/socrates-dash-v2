@@ -1,5 +1,24 @@
 # 🚀 Guia de Deploy - Sócrates Online
 
+## ⚠️ **CORREÇÃO DE ERRO - PANDAS/PYTHON 3.13**
+
+Se você recebeu erro de compilação do pandas no Render, use uma dessas soluções:
+
+### **Solução 1: Usar Versões Compatíveis (Recomendado)**
+```
+1. Use runtime.txt com Python 3.11.7
+2. Use requirements.txt com versões testadas
+3. Re-deploy no Render
+```
+
+### **Solução 2: Versão Simplificada**
+```
+1. Renomeie app_production.py para app_production_full.py
+2. Renomeie app_simple.py para app_production.py  
+3. Use requirements-minimal.txt como requirements.txt
+4. Re-deploy (funciona como demo online)
+```
+
 ## 📋 Opções de Deploy Gratuito
 
 ### 🥇 **RENDER.COM (Recomendado)**

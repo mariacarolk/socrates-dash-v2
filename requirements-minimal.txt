@@ -1,0 +1,13 @@
+# Versão mínima para deploy - sem dependências pesadas
+flask==2.3.3
+werkzeug==2.3.7
+gunicorn==20.1.0
+
+# Para processamento básico de dados
+openpyxl==3.1.2
+
+# Para PDF (versão mais estável)
+reportlab==3.6.0
+
+# Pandas mais leve (opcional - pode usar CSV puro)
+# pandas==1.5.3
