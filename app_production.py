@@ -559,29 +559,47 @@ def generate_report():
             return jsonify({'success': False, 'message': 'Data inicial deve ser anterior à data final'})
         
         # Usar dados do cache para gerar relatórios reais
-        dados_para_relatorio = processor.processed_data if processor.processed_data else get_dados_from_cache()
+        dados_para_relatorio = get_dados_from_cache()
         
         if not dados_para_relatorio:
-            return jsonify({'success': False, 'message': 'Importe um arquivo Excel primeiro para gerar relatórios'})
+            # Tentar recuperar dados processados em memória
+            if processor.processed_data:
+                dados_para_relatorio = processor.processed_data
+            else:
+                return jsonify({'success': False, 'message': 'Importe um arquivo Excel primeiro para gerar relatórios'})
         
-        # Simular processamento com dados reais do cache
+        # Garantir que o processor tenha os dados
         processor.processed_data = dados_para_relatorio
+        print(f"📊 Gerando relatório com {len(dados_para_relatorio)} registros")
         
         if tipo_filtro == 'circo':
             selected_circos = data.get('circos', [])
             if not selected_circos:
                 return jsonify({'success': False, 'message': 'Selecione pelo menos um circo'})
             
+            print(f"🎪 Filtrando por circos: {selected_circos}")
             report_data = processor.filter_and_generate_report(selected_circos, data_inicio, data_fim)
         else:
             selected_cidades = data.get('cidades', [])
             if not selected_cidades:
                 return jsonify({'success': False, 'message': 'Selecione pelo menos uma cidade'})
             
+            print(f"🏙️ Filtrando por cidades: {selected_cidades}")
+            
+            # Verificar se há associações antes de processar
+            cidades_associadas = processor.filter_by_associated_cities(selected_cidades)
+            print(f"🔗 Cidades associadas encontradas: {len(cidades_associadas)}")
+            
+            if not cidades_associadas:
+                return jsonify({'success': False, 'message': 'Nenhuma associação encontrada. Faça primeiro a associação das cidades aos dados.'})
+            
             report_data = processor.filter_and_generate_report_by_cities(selected_cidades, data_inicio, data_fim)
         
         if not report_data:
+            print(f"⚠️ Nenhum dado retornado do filtro")
             return jsonify({'success': False, 'message': 'Nenhum dado encontrado para os filtros selecionados'})
+        
+        print(f"✅ Report data gerado com {len(report_data)} registros")
         
         # Calcular totais
         total_geral = sum([item['Faturamento Total'] for item in report_data])
