@@ -149,10 +149,73 @@ def get_circos_cidades():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    return jsonify({
-        'success': False, 
-        'message': 'Upload disponível apenas na versão local completa'
-    })
+    """Upload e processamento de arquivo Excel"""
+    if not PANDAS_AVAILABLE:
+        return jsonify({
+            'success': False, 
+            'message': 'Pandas não disponível - funcionalidade limitada'
+        })
+    
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': 'Nenhum arquivo selecionado'})
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        return jsonify({'success': False, 'message': 'Nenhum arquivo selecionado'})
+    
+    if file and file.filename.lower().endswith(('.xlsx', '.xls')):
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        try:
+            file.save(filepath)
+            
+            # Processar arquivo Excel básico
+            df = pd.read_excel(filepath)
+            
+            # Extrair circos únicos
+            circos_unicos = []
+            if 'Evento' in df.columns:
+                eventos = df['Evento'].dropna().astype(str)
+                for evento in eventos:
+                    # Extrair nome do circo (versão simplificada)
+                    if '|' in evento:
+                        circo = evento.split('|')[0].strip()
+                    else:
+                        circo = evento.strip()
+                    
+                    if len(circo) > 2 and circo not in circos_unicos:
+                        circos_unicos.append(circo)
+            
+            # Remover arquivo
+            try:
+                os.remove(filepath)
+            except:
+                pass
+            
+            return jsonify({
+                'success': True,
+                'message': f'{len(df)} registros processados',
+                'stats': {
+                    'total_registros': len(df),
+                    'total_circos': len(circos_unicos),
+                    'circos': circos_unicos,
+                    'total_faturamento': 'R$ 0,00',
+                    'total_liquido': 'R$ 0,00'
+                },
+                'imported_data': []
+            })
+            
+        except Exception as e:
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except:
+                pass
+            return jsonify({'success': False, 'message': f'Erro ao processar arquivo: {str(e)}'})
+    else:
+        return jsonify({'success': False, 'message': 'Tipo de arquivo não permitido'})
 
 @app.route('/add_circo_cidade', methods=['POST'])
 def add_circo_cidade():

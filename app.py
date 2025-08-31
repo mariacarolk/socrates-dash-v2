@@ -924,7 +924,7 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     debug_mode = os.environ.get('FLASK_ENV') == 'development'
     
-        print("🎪 Sócrates Online iniciando...")
-        print("🌐 Acesse: http://localhost:5000")
+    print("🎪 Sócrates Online iniciando...")
+    print("🌐 Acesse: http://localhost:5000")
     
     app.run(debug=debug_mode, host='0.0.0.0', port=port)
