@@ -1,25 +1,8 @@
-# Dependências básicas e estáveis
-setuptools==68.2.2
-wheel==0.41.2
-pip==23.2.1
-
-# Framework web
 flask==2.3.3
-werkzeug==2.3.7
 gunicorn==20.1.0
-
-# Processamento de arquivos
 openpyxl==3.1.2
-
-# PDF generation
 reportlab==4.0.4
-
-# Plotly para gráficos (versão estável)
 plotly==5.15.0
-
-# Pandas (versão mais antiga e estável)
 pandas==1.5.3
 numpy==1.24.4
-
-# PostgreSQL
 psycopg2-binary==2.9.7
