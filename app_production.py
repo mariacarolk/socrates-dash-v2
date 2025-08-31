@@ -224,6 +224,130 @@ class SocratesProcessor:
         for data in self.processed_data:
             circos.add(data['Circo'])
         return sorted(list(circos))
+    
+    def filter_and_generate_report(self, selected_circos, data_inicio, data_fim):
+        """Filtra dados e gera relatório por circos"""
+        df = pd.DataFrame(self.processed_data)
+        
+        if df.empty:
+            return []
+        
+        # Filtrar por período e circos
+        try:
+            df['Data Evento Parsed'] = pd.to_datetime(df['Data Evento'], format='%d/%m/%Y')
+            df = df[
+                (df['Data Evento Parsed'].dt.date >= data_inicio) &
+                (df['Data Evento Parsed'].dt.date <= data_fim) &
+                (df['Circo'].isin(selected_circos))
+            ]
+        except:
+            pass
+        
+        if df.empty:
+            return []
+        
+        # Agrupar por circo
+        grouped = df.groupby('Circo').agg({
+            'Faturamento Total': 'sum',
+            'Faturamento Gestão Produtor': 'sum',
+            'Taxas e Descontos': 'sum',
+            'Valor Líquido': 'sum'
+        }).reset_index()
+        
+        # Criar dados do relatório
+        report_data = []
+        periodo_str = f"{data_inicio.strftime('%d/%m/%Y')} - {data_fim.strftime('%d/%m/%Y')}"
+        
+        for _, row in grouped.iterrows():
+            report_data.append({
+                'Circo': row['Circo'],
+                'Período': periodo_str,
+                'Faturamento Total': row['Faturamento Total'],
+                'Faturamento Gestão Produtor': row['Faturamento Gestão Produtor'],
+                'Taxas e Descontos': row['Taxas e Descontos'],
+                'Valor Líquido': row['Valor Líquido'],
+                'Total Geral': row['Faturamento Total']
+            })
+        
+        self.last_report_data = report_data
+        return report_data
+    
+    def filter_and_generate_report_by_cities(self, selected_cidades, data_inicio, data_fim):
+        """Filtrar dados e gerar relatório agrupado por cidades"""
+        if not self.processed_data:
+            return []
+        
+        df = pd.DataFrame(self.processed_data)
+        
+        # Filtrar por período
+        try:
+            df['Data Evento Parsed'] = pd.to_datetime(df['Data Evento'], format='%d/%m/%Y')
+            df = df[
+                (df['Data Evento Parsed'].dt.date >= data_inicio) &
+                (df['Data Evento Parsed'].dt.date <= data_fim)
+            ]
+        except:
+            pass
+        
+        if df.empty:
+            return []
+        
+        # Fazer associação com cidades
+        circos_cidades = circos_manager.get_all()
+        df['Cidade'] = 'Não encontrada'
+        
+        for index, row in df.iterrows():
+            circo = row['Circo']
+            data_evento_str = row['Data Evento']
+            
+            try:
+                data_evento = datetime.strptime(data_evento_str, '%d/%m/%Y').date()
+            except:
+                continue
+            
+            for circo_cidade in circos_cidades:
+                if circo_cidade['CIRCO'] == circo:
+                    try:
+                        data_inicio_cc = datetime.strptime(circo_cidade['DATA_INICIO'], '%d/%m/%Y').date()
+                        data_fim_cc = datetime.strptime(circo_cidade['DATA_FIM'], '%d/%m/%Y').date()
+                        
+                        if data_inicio_cc <= data_evento <= data_fim_cc:
+                            df.at[index, 'Cidade'] = circo_cidade['CIDADE']
+                            break
+                    except:
+                        continue
+        
+        # Filtrar por cidades selecionadas
+        df = df[df['Cidade'].isin(selected_cidades)]
+        
+        if df.empty:
+            return []
+        
+        # Agrupar por cidade
+        grouped = df.groupby('Cidade').agg({
+            'Faturamento Total': 'sum',
+            'Faturamento Gestão Produtor': 'sum',
+            'Taxas e Descontos': 'sum',
+            'Valor Líquido': 'sum'
+        }).reset_index()
+        
+        # Criar dados do relatório
+        report_data = []
+        periodo_str = f"{data_inicio.strftime('%d/%m/%Y')} - {data_fim.strftime('%d/%m/%Y')}"
+        
+        for _, row in grouped.iterrows():
+            report_data.append({
+                'Circo': row['Cidade'],  # Usar cidade como label
+                'Período': periodo_str,
+                'Faturamento Total': row['Faturamento Total'],
+                'Faturamento Gestão Produtor': row['Faturamento Gestão Produtor'],
+                'Taxas e Descontos': row['Taxas e Descontos'],
+                'Valor Líquido': row['Valor Líquido'],
+                'Total Geral': row['Faturamento Total']
+            })
+        
+        self.last_report_data = report_data
+        return report_data
 
 # Instâncias globais
 processor = SocratesProcessor()
