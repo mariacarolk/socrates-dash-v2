@@ -353,13 +353,10 @@
                                             <input type="text" class="form-control" id="cidadeInput" placeholder="Ex: São Paulo" required>
                                         </div>
                                         <div class="col-md-3">
-                                            <label for="circoInput" class="form-label">Circo:</label>
-                                            <input type="text" class="form-control" id="circoInput" 
-                                                   placeholder="Digite o nome do circo" 
-                                                   list="circosList" required>
-                                            <datalist id="circosList">
-                                                <!-- Options will be populated dynamically -->
-                                            </datalist>
+                                            <label for="circoSelect" class="form-label">Circo:</label>
+                                            <select class="form-select" id="circoSelectCrud" required>
+                                                <option value="">Primeiro importe um arquivo Excel</option>
+                                            </select>
                                         </div>
                                         <div class="col-md-2">
                                             <label for="dataInicioInput" class="form-label">Data Início:</label>
@@ -728,6 +725,13 @@
                     }
                     
                     populateCircosSelect(data.stats.circos);
+                    
+                    // Habilitar select de circos no CRUD após importação
+                    const circoSelect = document.getElementById('circoSelectCrud');
+                    if (circoSelect) {
+                        circoSelect.disabled = false;
+                        populateCircoSelectCrud(data.stats.circos);
+                    }
                 } else {
                     console.error('Erro no processamento:', data.message);
                     showAlert(data.message, 'danger');
@@ -1022,7 +1026,7 @@
                         console.log('✅ Sucesso! Dados de circos:', data.circos_cidades);
                         console.log('🎪 Circos do relatório:', data.circos_relatorio);
                         populateCircosCrudTable(data.circos_cidades);
-                        populateCircoSelectCrud(data.circos_relatorio, data.circos_cidades);
+                        populateCircoSelectCrud(data.circos_relatorio);
                     } else {
                         console.error('❌ Erro na resposta:', data.message);
                         showAlert('Erro ao carregar dados de circos: ' + data.message, 'danger');
@@ -1060,37 +1064,36 @@
             console.log(`Tabela CRUD preenchida com ${circosData.length} registros`);
         }
 
-        function populateCircoSelectCrud(circosRelatorio, circosExistentes = []) {
-            const datalist = document.getElementById('circosList');
+        function populateCircoSelectCrud(circosRelatorio) {
+            const select = document.getElementById('circoSelectCrud');
             
-            // Limpar opções existentes
-            datalist.innerHTML = '';
-            
-            // Combinar circos do relatório + circos já cadastrados
-            const todosCircos = new Set();
-            
-            // Adicionar circos do relatório (se houver)
-            circosRelatorio.forEach(circo => todosCircos.add(circo));
-            
-            // Adicionar circos já cadastrados no banco
-            circosExistentes.forEach(item => todosCircos.add(item.CIRCO));
-            
-            // Adicionar circos padrão se lista estiver vazia
-            if (todosCircos.size === 0) {
-                ['Circo dos Dinossauros', 'Disney Magic Show', 'Circo Ático'].forEach(circo => {
-                    todosCircos.add(circo);
-                });
+            // Limpar opções existentes (exceto a primeira)
+            while (select.children.length > 1) {
+                select.removeChild(select.lastChild);
             }
             
-            // Ordenar e adicionar ao datalist
-            const circosOrdenados = Array.from(todosCircos).sort();
-            circosOrdenados.forEach(circo => {
-                const option = document.createElement('option');
-                option.value = circo;
-                datalist.appendChild(option);
-            });
-            
-            console.log(`✅ ${circosOrdenados.length} circos carregados no CRUD (input + datalist)`);
+            // APENAS usar circos do Excel importado
+            if (circosRelatorio && circosRelatorio.length > 0) {
+                // Atualizar texto da primeira opção
+                select.children[0].textContent = "Selecione um circo";
+                select.children[0].value = "";
+                
+                // Adicionar APENAS circos do Excel importado
+                circosRelatorio.forEach(circo => {
+                    const option = document.createElement('option');
+                    option.value = circo;
+                    option.textContent = circo;
+                    select.appendChild(option);
+                });
+                
+                console.log(`✅ ${circosRelatorio.length} circos do Excel disponíveis para cadastro`);
+            } else {
+                // Se não há circos importados, desabilitar
+                select.children[0].textContent = "Primeiro importe um arquivo Excel";
+                select.children[0].value = "";
+                select.disabled = true;
+                console.log(`⚠️ Nenhum circo importado - cadastro desabilitado`);
+            }
         }
 
         function editCirco(index) {
@@ -1104,7 +1107,7 @@
                         const item = data.circos_cidades[index];
                         
                         document.getElementById('cidadeInput').value = item.CIDADE;
-                        document.getElementById('circoInput').value = item.CIRCO;
+                        document.getElementById('circoSelectCrud').value = item.CIRCO;
                         document.getElementById('dataInicioInput').value = formatDateForInput(item.DATA_INICIO);
                         document.getElementById('dataFimInput').value = formatDateForInput(item.DATA_FIM);
                         
@@ -1173,7 +1176,7 @@
             e.preventDefault();
             
             const cidade = document.getElementById('cidadeInput').value.trim();
-            const circo = document.getElementById('circoInput').value.trim();
+            const circo = document.getElementById('circoSelectCrud').value;
             const dataInicio = formatDateForSave(document.getElementById('dataInicioInput').value);
             const dataFim = formatDateForSave(document.getElementById('dataFimInput').value);
             

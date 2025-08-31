@@ -616,20 +616,13 @@ def get_circos_cidades():
     try:
         circos_data = circos_manager.get_all()
         
-        # Circos do relatório (se houver dados importados)
+        # APENAS circos do relatório (importados do Excel)
         circos_relatorio = processor.get_unique_circos() if processor.processed_data else []
-        
-        # Circos únicos do banco de dados (sempre disponível)
-        circos_banco = circos_manager.get_circos_unicos() if hasattr(circos_manager, 'get_circos_unicos') else []
-        
-        # Combinar circos do relatório + banco
-        todos_circos = list(set(circos_relatorio + circos_banco))
-        todos_circos.sort()
         
         return jsonify({
             'success': True,
             'circos_cidades': circos_data,
-            'circos_relatorio': todos_circos,  # Agora inclui circos do banco
+            'circos_relatorio': circos_relatorio,  # Apenas circos do Excel
             'total_registros': len(circos_data)
         })
     except Exception as e:
@@ -929,7 +922,7 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     debug_mode = os.environ.get('FLASK_ENV') == 'development'
     
-    print("🎪 Sócrates Online iniciando...")
-    print("🌐 Acesse: http://localhost:5000")
+        print("🎪 Sócrates Online iniciando...")
+        print("🌐 Acesse: http://localhost:5000")
     
     app.run(debug=debug_mode, host='0.0.0.0', port=port)
