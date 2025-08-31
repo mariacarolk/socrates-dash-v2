@@ -229,8 +229,9 @@ class SocratesProcessor:
 processor = SocratesProcessor()
 circos_manager = PostgreSQLManager()
 
-# Armazenar circos importados globalmente (persistente)
+# Armazenar dados importados globalmente (persistente)
 CIRCOS_IMPORTADOS = []
+DADOS_IMPORTADOS = []
 
 # Cache simples para circos (persistente entre requisições)
 import threading
@@ -247,6 +248,18 @@ def save_circos_to_cache(circos_list):
     with circos_cache_lock:
         CIRCOS_IMPORTADOS = circos_list.copy()
         print(f"💾 Circos salvos no cache: {CIRCOS_IMPORTADOS}")
+
+def save_dados_to_cache(dados_list):
+    """Salvar dados processados no cache"""
+    global DADOS_IMPORTADOS
+    with circos_cache_lock:
+        DADOS_IMPORTADOS = dados_list.copy()
+        print(f"💾 Dados salvos no cache: {len(DADOS_IMPORTADOS)} registros")
+
+def get_dados_from_cache():
+    """Obter dados do cache"""
+    with circos_cache_lock:
+        return DADOS_IMPORTADOS.copy()
 
 def add_circo_to_cache(circo_name):
     """Adicionar circo ao cache se não existir"""
@@ -304,8 +317,9 @@ def upload_file():
                 total_faturamento = sum([item['Faturamento Total'] for item in processor.processed_data])
                 total_liquido = sum([item['Valor Líquido'] for item in processor.processed_data])
                 
-                # SALVAR CIRCOS NO CACHE para outras requisições
+                # SALVAR CIRCOS E DADOS NO CACHE para outras requisições
                 save_circos_to_cache(circos_unicos)
+                save_dados_to_cache(processor.processed_data)
                 
                 # Preparar dados formatados
                 display_data = []
@@ -446,7 +460,10 @@ def confirm_circos():
 def associate_cities_to_data():
     """Associar cidades aos dados importados"""
     try:
-        if not processor.processed_data:
+        # Usar dados do cache se processor.processed_data estiver vazio
+        dados_para_associar = processor.processed_data if processor.processed_data else get_dados_from_cache()
+        
+        if not dados_para_associar:
             return jsonify({'success': False, 'message': 'Nenhum dado importado encontrado'})
         
         circos_cidades = circos_manager.get_all()
@@ -456,7 +473,9 @@ def associate_cities_to_data():
         
         associated_data = []
         
-        for item in processor.processed_data:
+        print(f"🔗 Iniciando associação com {len(dados_para_associar)} registros e {len(circos_cidades)} cidades")
+        
+        for item in dados_para_associar:
             circo = item['Circo']
             data_evento_str = item['Data Evento']
             
