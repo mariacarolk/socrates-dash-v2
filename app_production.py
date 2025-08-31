@@ -317,9 +317,12 @@ def upload_file():
                 total_faturamento = sum([item['Faturamento Total'] for item in processor.processed_data])
                 total_liquido = sum([item['Valor Líquido'] for item in processor.processed_data])
                 
-                # SALVAR CIRCOS E DADOS NO CACHE para outras requisições
+                # SALVAR CIRCOS NO POSTGRESQL E CACHE
                 save_circos_to_cache(circos_unicos)
                 save_dados_to_cache(processor.processed_data)
+                
+                # Salvar circos importados no PostgreSQL
+                circos_manager.save_circos_importados(circos_unicos)
                 
                 # Preparar dados formatados
                 display_data = []
@@ -364,16 +367,29 @@ def get_circos_cidades():
     try:
         circos_data = circos_manager.get_all()
         
-        # APENAS circos do relatório (importados do Excel) + cache
-        circos_relatorio = processor.get_unique_circos() if processor.processed_data else get_circos_from_cache()
-        print(f"🎪 Retornando circos: {circos_relatorio}")
+        # Buscar circos: primeiro dos dados processados, depois do PostgreSQL, depois do cache
+        if processor.processed_data:
+            circos_relatorio = processor.get_unique_circos()
+            print(f"🎪 Usando circos dos dados processados: {circos_relatorio}")
+        else:
+            circos_relatorio = circos_manager.get_circos_importados()
+            if not circos_relatorio:
+                circos_relatorio = get_circos_from_cache()
+            print(f"🎪 Usando circos do PostgreSQL/cache: {circos_relatorio}")
+        
         print(f"🔍 Dados processados: {len(processor.processed_data)}")
         print(f"🔍 Cache circos: {get_circos_from_cache()}")
+        print(f"🔍 PostgreSQL circos: {circos_manager.get_circos_importados()}")
+        
+        # Extrair cidades únicas para filtros
+        cidades_unicas = list(set(item['CIDADE'] for item in circos_data if 'CIDADE' in item))
+        cidades_unicas.sort()
         
         return jsonify({
             'success': True,
             'circos_cidades': circos_data,
             'circos_relatorio': circos_relatorio,  # Apenas circos do Excel
+            'cidades_disponiveis': cidades_unicas,  # Lista de cidades para filtros
             'total_registros': len(circos_data)
         })
     except Exception as e:
@@ -389,6 +405,10 @@ def add_circo_cidade():
         data_inicio = data.get('data_inicio', '').strip()
         data_fim = data.get('data_fim', '').strip()
         
+        print(f"🔄 TENTANDO SALVAR CIDADE: {cidade} - {circo}")
+        print(f"🔍 PostgreSQL disponível: {hasattr(circos_manager, 'connection') and circos_manager.connection is not None}")
+        print(f"🔍 DATABASE_URL presente: {'DATABASE_URL' in os.environ}")
+        
         if not all([cidade, circo, data_inicio, data_fim]):
             return jsonify({'success': False, 'message': 'Todos os campos são obrigatórios'})
         
@@ -397,11 +417,17 @@ def add_circo_cidade():
         if success:
             # Adicionar circo ao cache para manter na lista
             add_circo_to_cache(circo)
-            return jsonify({'success': True, 'message': 'Circo adicionado com sucesso'})
+            print(f"✅ CIDADE SALVA COM SUCESSO: {cidade}")
+            return jsonify({'success': True, 'message': f'Cidade {cidade} adicionada com sucesso! (PostgreSQL: {circos_manager.connection is not None})'})
         else:
-            return jsonify({'success': False, 'message': 'Erro ao adicionar circo'})
+            print(f"❌ FALHA AO SALVAR CIDADE: {cidade}")
+            if not hasattr(circos_manager, 'connection') or not circos_manager.connection:
+                return jsonify({'success': False, 'message': 'PostgreSQL não configurado no Railway. Adicione Database → PostgreSQL no dashboard.'})
+            else:
+                return jsonify({'success': False, 'message': 'Erro ao adicionar circo'})
             
     except Exception as e:
+        print(f"💥 EXCEÇÃO ao salvar cidade: {e}")
         return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
 
 @app.route('/update_circo_cidade', methods=['POST'])

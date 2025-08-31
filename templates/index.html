@@ -840,7 +840,8 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        const cidadesUnicas = [...new Set(data.circos_cidades.map(item => item.CIDADE))].sort();
+                        // Usar cidades do backend se disponível, senão extrair dos dados
+                        const cidadesUnicas = data.cidades_disponiveis || [...new Set(data.circos_cidades.map(item => item.CIDADE))].sort();
                         const select = document.getElementById('cidadesSelect');
                         select.innerHTML = '';
                         

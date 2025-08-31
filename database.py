@@ -88,6 +88,15 @@ class PostgreSQLManager:
                 )
             """)
             
+            # Tabela para armazenar circos importados do Excel
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS circos_importados (
+                    id SERIAL PRIMARY KEY,
+                    circo VARCHAR(100) UNIQUE NOT NULL,
+                    imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
             # Índices para performance
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_circos_cidades_circo 
@@ -310,10 +319,58 @@ class PostgreSQLManager:
             return []
     
     def get_circos_unicos(self):
-        """Obter lista de circos únicos"""
+        """Obter lista de circos únicos dos cadastros"""
         data = self.get_all()
         circos = set(item['CIRCO'] for item in data)
         return sorted(list(circos))
+    
+    def save_circos_importados(self, circos_list):
+        """Salvar lista de circos importados do Excel"""
+        if not self.connection:
+            return False
+        
+        try:
+            cursor = self.connection.cursor()
+            
+            # Limpar circos antigos
+            cursor.execute("DELETE FROM circos_importados")
+            
+            # Inserir novos circos
+            for circo in circos_list:
+                cursor.execute("""
+                    INSERT INTO circos_importados (circo) 
+                    VALUES (%s) ON CONFLICT (circo) DO NOTHING
+                """, (circo,))
+            
+            self.connection.commit()
+            cursor.close()
+            print(f"✅ {len(circos_list)} circos importados salvos no PostgreSQL")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Erro ao salvar circos importados: {e}")
+            if self.connection:
+                self.connection.rollback()
+            return False
+    
+    def get_circos_importados(self):
+        """Obter lista de circos importados do Excel"""
+        if not self.connection:
+            return []
+        
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT circo FROM circos_importados ORDER BY circo")
+            results = cursor.fetchall()
+            cursor.close()
+            
+            circos = [row[0] for row in results]
+            print(f"📋 Circos importados recuperados: {circos}")
+            return circos
+            
+        except Exception as e:
+            print(f"❌ Erro ao buscar circos importados: {e}")
+            return []
     
     def verify_and_recover(self):
         """Verificar conexão e dados"""
