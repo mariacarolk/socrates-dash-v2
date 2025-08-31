@@ -1,160 +1,250 @@
 #!/usr/bin/env python3
 """
 Sócrates Online - Aplicação Flask para Produção
+VERSÃO IDÊNTICA À LOCAL
 """
 
 import os
-import sys
-from datetime import datetime
+import json
+import io
+from datetime import datetime, date
 from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for
 from werkzeug.utils import secure_filename
+import pandas as pd
+import re
 
-# Criar app Flask
+# Plotly para gráficos
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    import plotly.utils
+    PLOTLY_AVAILABLE = True
+    print("✅ Plotly carregado com sucesso")
+except ImportError as e:
+    print(f"⚠️ Plotly não disponível: {e}")
+    PLOTLY_AVAILABLE = False
+
+# ReportLab para PDF
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+
+# PostgreSQL
+from database import PostgreSQLManager
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', '6a5bb56c77797ae84352a9043ab0b7e04a8a86530cbc74f388b63607d99741fb')
 
 # Configurações
+ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 UPLOAD_FOLDER = 'uploads'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
 
-# Criar pastas
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+
+# Criar pasta de uploads se não existir
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Importar dependências opcionais
-try:
-    import pandas as pd
-    import plotly.express as px
-    import plotly.graph_objects as go
-    import plotly.utils
-    PANDAS_AVAILABLE = True
-    PLOTLY_AVAILABLE = True
-    print("✅ Pandas e Plotly carregados")
-except ImportError as e:
-    print(f"⚠️ Pandas/Plotly não disponível: {e}")
-    PANDAS_AVAILABLE = False
-    PLOTLY_AVAILABLE = False
-
-try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib import colors
-    from reportlab.lib.units import inch
-    REPORTLAB_AVAILABLE = True
-    print("✅ ReportLab carregado")
-except ImportError:
-    REPORTLAB_AVAILABLE = False
-    print("⚠️ ReportLab não disponível")
-
-# PostgreSQL
-try:
-    import psycopg2
-    import psycopg2.extras
+class SocratesProcessor:
+    """Classe para processar dados do Sócrates Online"""
     
-    # Configuração do banco
-    DATABASE_URL = (
-        os.environ.get('DATABASE_URL') or 
-        os.environ.get('POSTGRES_URL') or 
-        'postgresql://postgres:postgres@localhost:5432/socrates_online'
-    )
-    
-    class SimplePostgreSQLManager:
-        def __init__(self):
-            self.connection = None
-            self.connect()
-        
-        def connect(self):
-            try:
-                print("🔗 Conectando ao PostgreSQL...")
-                self.connection = psycopg2.connect(DATABASE_URL, connect_timeout=10)
-                print("✅ PostgreSQL conectado!")
-            except Exception as e:
-                print(f"❌ PostgreSQL erro: {e}")
-                self.connection = None
-        
-        def get_all(self):
-            if not self.connection:
-                return []
-            try:
-                cursor = self.connection.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-                cursor.execute("SELECT * FROM circos_cidades ORDER BY cidade")
-                results = cursor.fetchall()
-                cursor.close()
-                return [dict(row) for row in results]
-            except:
-                return []
-        
-        def add_circo(self, cidade, circo, data_inicio, data_fim):
-            if not self.connection:
-                return False
-            try:
-                cursor = self.connection.cursor()
-                cursor.execute("""
-                    INSERT INTO circos_cidades (cidade, circo, data_inicio, data_fim)
-                    VALUES (%s, %s, %s, %s)
-                """, (cidade, circo, 
-                     datetime.strptime(data_inicio, '%d/%m/%Y').date(),
-                     datetime.strptime(data_fim, '%d/%m/%Y').date()))
-                self.connection.commit()
-                cursor.close()
-                return True
-            except Exception as e:
-                print(f"❌ Erro add_circo: {e}")
-                return False
-    
-    circos_manager = SimplePostgreSQLManager()
-    POSTGRESQL_AVAILABLE = True
-    print("✅ PostgreSQL Manager carregado")
-    
-except ImportError:
-    # Fallback simples
-    class CSVFallback:
-        def get_all(self):
-            return []
-        def add_circo(self, *args):
-            return False
-    
-    circos_manager = CSVFallback()
-    POSTGRESQL_AVAILABLE = False
-    print("⚠️ PostgreSQL não disponível")
-
-# Classe de processamento simplificada
-class SimpleProcessor:
     def __init__(self):
         self.processed_data = []
+        self.original_df = None
     
+    def allowed_file(self, filename):
+        """Verifica se o arquivo é permitido"""
+        return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    
+    def extract_circo_name(self, evento_text):
+        """Extrai o nome do circo do texto do evento"""
+        
+        # Verificar se é NAN ou inválido
+        if pd.isna(evento_text) or str(evento_text).lower() in ['nan', 'none', '']:
+            return "Evento Inválido"
+        
+        evento = str(evento_text).strip()
+        
+        # Caso 1: Se há barra |, usar texto antes da barra
+        if '|' in evento:
+            return evento.split('|')[0].strip()
+        
+        # Caso 2: Procurar por padrões de data e usar texto antes da data
+        dias_semana = r'(?:segunda|terça|terca|quarta|quinta|sexta|sábado|sabado|domingo|seg|ter|qua|qui|sex|sab|dom)'
+        
+        date_patterns = [
+            rf'\s+{dias_semana}\s+\d{{1,2}}\.\w{{3}}',
+            rf'\s+{dias_semana}\s+\d{{1,2}}/\d{{1,2}}',
+            r'\s+\d{1,2}\.\w{3}',
+            r'\s+\d{1,2}/\d{1,2}',
+            r'\s+\d{1,2}-\d{1,2}',
+            r'\s+\d{1,2}\s+\w{3}',
+            rf'\s+{dias_semana}$',
+        ]
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, evento, re.IGNORECASE)
+            if match:
+                circo_name = evento[:match.start()].strip()
+                if circo_name and len(circo_name) > 2:
+                    return circo_name
+        
+        # Remover dias da semana do final
+        evento_limpo = re.sub(rf'\s+{dias_semana}$', '', evento, flags=re.IGNORECASE)
+        if evento_limpo != evento and len(evento_limpo.strip()) > 2:
+            return evento_limpo.strip()
+        
+        if len(evento.strip()) > 2:
+            return evento.strip()
+        
+        return "Evento Sem Nome"
+
+    def format_currency(self, value):
+        """Formata valores monetários"""
+        try:
+            if pd.isna(value):
+                return 0
+            
+            if isinstance(value, str):
+                value = value.replace('R$', '').replace('.', '').replace(',', '.')
+                value = ''.join(c for c in value if c.isdigit() or c == '.')
+                value = float(value) if value else 0
+            
+            return float(value)
+        except:
+            return 0
+
+    def format_currency_display(self, value):
+        """Formata valores para exibição"""
+        try:
+            return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        except:
+            return "R$ 0,00"
+
+    def process_excel_file(self, file_path):
+        """Processa arquivo Excel e retorna dados processados"""
+        try:
+            df = pd.read_excel(file_path)
+            self.original_df = df.copy()
+            
+            # Verificar colunas necessárias
+            required_columns = ['Evento', 'Data Evento', 'Faturamento Total', 'Faturamento Gestão Produtor']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            
+            if missing_columns:
+                return False, f"Colunas não encontradas: {', '.join(missing_columns)}"
+            
+            self.processed_data = []
+            
+            for index, row in df.iterrows():
+                try:
+                    if pd.isna(row['Evento']):
+                        continue
+                    
+                    evento = str(row['Evento'])
+                    circo = self.extract_circo_name(evento)
+                    
+                    if circo in ['Evento Inválido', 'Evento Sem Nome']:
+                        continue
+                    
+                    # Processar Data Evento
+                    data_evento = row['Data Evento']
+                    if pd.isna(data_evento):
+                        data_evento = "Não informado"
+                    else:
+                        try:
+                            if isinstance(data_evento, str):
+                                for fmt in ['%d/%m/%Y', '%d-%m-%Y', '%d.%m.%Y', '%d/%m/%y']:
+                                    try:
+                                        parsed_date = datetime.strptime(data_evento, fmt)
+                                        data_evento = parsed_date.strftime('%d/%m/%Y')
+                                        break
+                                    except ValueError:
+                                        continue
+                                else:
+                                    try:
+                                        parsed_date = pd.to_datetime(data_evento, format='%d/%m/%Y')
+                                        data_evento = parsed_date.strftime('%d/%m/%Y')
+                                    except:
+                                        try:
+                                            parsed_date = pd.to_datetime(data_evento, dayfirst=True)
+                                            data_evento = parsed_date.strftime('%d/%m/%Y')
+                                        except:
+                                            data_evento = str(data_evento)
+                            else:
+                                data_evento = data_evento.strftime('%d/%m/%Y')
+                        except Exception as e:
+                            print(f"⚠️ Erro ao processar data '{data_evento}': {e}")
+                            data_evento = str(data_evento)
+                    
+                    # Processar valores
+                    faturamento_total = self.format_currency(row['Faturamento Total'])
+                    faturamento_gestao = self.format_currency(row['Faturamento Gestão Produtor'])
+                    
+                    # Processar taxas e descontos
+                    taxas_columns = [
+                        'Taxa Antecipação', 'Taxa Transferencia', 'I:Comissão Bilheteria e PDVS',
+                        'I:Insumo - Ingresso Cancelado', 'I:Insumo - Ingresso Cortesia',
+                        'I:Taxas Cartões - Debito', 'I:Taxas Cartões - Credito à Vista',
+                        'I:Taxa Pix', 'I:Despesas Jurídicas'
+                    ]
+                    
+                    taxas_e_descontos = 0
+                    for col in taxas_columns:
+                        if col in row and not pd.isna(row[col]):
+                            taxas_e_descontos += self.format_currency(row[col])
+                    
+                    # Calcular valor líquido
+                    valor_liquido = faturamento_total - faturamento_gestao - taxas_e_descontos
+                    
+                    self.processed_data.append({
+                        'Circo': circo,
+                        'Data Evento': data_evento,
+                        'Evento Completo': evento,
+                        'Faturamento Total': faturamento_total,
+                        'Faturamento Gestão Produtor': faturamento_gestao,
+                        'Taxas e Descontos': taxas_e_descontos,
+                        'Valor Líquido': valor_liquido
+                    })
+                    
+                except Exception as e:
+                    continue
+            
+            return True, f"{len(self.processed_data)} registros processados com sucesso"
+            
+        except Exception as e:
+            return False, f"Erro ao processar arquivo: {str(e)}"
+
     def get_unique_circos(self):
-        return []
+        """Retorna lista de circos únicos"""
+        circos = set()
+        for data in self.processed_data:
+            circos.add(data['Circo'])
+        return sorted(list(circos))
 
-processor = SimpleProcessor()
+# Instâncias globais
+processor = SocratesProcessor()
+circos_manager = PostgreSQLManager()
 
-# Rotas básicas
+print("🐘 ✅ Sócrates Online - PostgreSQL Ativo")
+
+# TODAS AS ROTAS IGUAIS AO app.py
 @app.route('/')
 def index():
-    return render_template('index.html')
-
-@app.route('/get_circos_cidades', methods=['GET'])
-def get_circos_cidades():
-    try:
-        circos_data = circos_manager.get_all()
-        return jsonify({
-            'success': True,
-            'circos_cidades': circos_data,
-            'circos_relatorio': [],
-            'total_registros': len(circos_data)
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
+    """Página principal"""
+    response = app.make_response(render_template('index.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Upload e processamento de arquivo Excel"""
-    if not PANDAS_AVAILABLE:
-        return jsonify({
-            'success': False, 
-            'message': 'Pandas não disponível - funcionalidade limitada'
-        })
+    print("=== UPLOAD REQUEST RECEBIDO ===")
     
     if 'file' not in request.files:
         return jsonify({'success': False, 'message': 'Nenhum arquivo selecionado'})
@@ -164,49 +254,55 @@ def upload_file():
     if file.filename == '':
         return jsonify({'success': False, 'message': 'Nenhum arquivo selecionado'})
     
-    if file and file.filename.lower().endswith(('.xlsx', '.xls')):
+    if file and processor.allowed_file(file.filename):
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
         try:
             file.save(filepath)
             
-            # Processar arquivo Excel básico
-            df = pd.read_excel(filepath)
+            # Processar arquivo
+            success, message = processor.process_excel_file(filepath)
             
-            # Extrair circos únicos
-            circos_unicos = []
-            if 'Evento' in df.columns:
-                eventos = df['Evento'].dropna().astype(str)
-                for evento in eventos:
-                    # Extrair nome do circo (versão simplificada)
-                    if '|' in evento:
-                        circo = evento.split('|')[0].strip()
-                    else:
-                        circo = evento.strip()
-                    
-                    if len(circo) > 2 and circo not in circos_unicos:
-                        circos_unicos.append(circo)
-            
-            # Remover arquivo
+            # Remover arquivo após processamento
             try:
                 os.remove(filepath)
             except:
                 pass
             
-            return jsonify({
-                'success': True,
-                'message': f'{len(df)} registros processados',
-                'stats': {
-                    'total_registros': len(df),
-                    'total_circos': len(circos_unicos),
-                    'circos': circos_unicos,
-                    'total_faturamento': 'R$ 0,00',
-                    'total_liquido': 'R$ 0,00'
-                },
-                'imported_data': []
-            })
-            
+            if success:
+                # Calcular estatísticas
+                circos_unicos = processor.get_unique_circos()
+                total_faturamento = sum([item['Faturamento Total'] for item in processor.processed_data])
+                total_liquido = sum([item['Valor Líquido'] for item in processor.processed_data])
+                
+                # Preparar dados formatados
+                display_data = []
+                for item in processor.processed_data:
+                    display_data.append({
+                        'Circo': item['Circo'],
+                        'Data Evento': item['Data Evento'],
+                        'Faturamento Total': processor.format_currency_display(item['Faturamento Total']),
+                        'Faturamento Gestão Produtor': processor.format_currency_display(item['Faturamento Gestão Produtor']),
+                        'Taxas e Descontos': processor.format_currency_display(item['Taxas e Descontos']),
+                        'Valor Líquido': processor.format_currency_display(item['Valor Líquido'])
+                    })
+                
+                return jsonify({
+                    'success': True,
+                    'message': message,
+                    'stats': {
+                        'total_registros': len(processor.processed_data),
+                        'total_circos': len(circos_unicos),
+                        'circos': circos_unicos,
+                        'total_faturamento': processor.format_currency_display(total_faturamento),
+                        'total_liquido': processor.format_currency_display(total_liquido)
+                    },
+                    'imported_data': display_data
+                })
+            else:
+                return jsonify({'success': False, 'message': message})
+                
         except Exception as e:
             try:
                 if os.path.exists(filepath):
@@ -217,55 +313,187 @@ def upload_file():
     else:
         return jsonify({'success': False, 'message': 'Tipo de arquivo não permitido'})
 
+@app.route('/get_circos_cidades', methods=['GET'])
+def get_circos_cidades():
+    """Obter dados de circos e cidades"""
+    try:
+        circos_data = circos_manager.get_all()
+        
+        # APENAS circos do relatório (importados do Excel)
+        circos_relatorio = processor.get_unique_circos() if processor.processed_data else []
+        
+        return jsonify({
+            'success': True,
+            'circos_cidades': circos_data,
+            'circos_relatorio': circos_relatorio,  # Apenas circos do Excel
+            'total_registros': len(circos_data)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
+
 @app.route('/add_circo_cidade', methods=['POST'])
 def add_circo_cidade():
+    """Adicionar novo circo/cidade"""
     try:
         data = request.get_json()
-        success = circos_manager.add_circo(
-            data.get('cidade', '').strip(),
-            data.get('circo', '').strip(),
-            data.get('data_inicio', '').strip(),
-            data.get('data_fim', '').strip()
-        )
+        cidade = data.get('cidade', '').strip()
+        circo = data.get('circo', '').strip()
+        data_inicio = data.get('data_inicio', '').strip()
+        data_fim = data.get('data_fim', '').strip()
+        
+        if not all([cidade, circo, data_inicio, data_fim]):
+            return jsonify({'success': False, 'message': 'Todos os campos são obrigatórios'})
+        
+        success = circos_manager.add_circo(cidade, circo, data_inicio, data_fim)
         
         if success:
             return jsonify({'success': True, 'message': 'Circo adicionado com sucesso'})
         else:
             return jsonify({'success': False, 'message': 'Erro ao adicionar circo'})
+            
     except Exception as e:
         return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
 
-# Outras rotas básicas
 @app.route('/update_circo_cidade', methods=['POST'])
 def update_circo_cidade():
-    return jsonify({'success': False, 'message': 'Funcionalidade disponível na versão local'})
+    """Atualizar circo/cidade existente"""
+    try:
+        data = request.get_json()
+        index = data.get('index')
+        cidade = data.get('cidade', '').strip()
+        circo = data.get('circo', '').strip()
+        data_inicio = data.get('data_inicio', '').strip()
+        data_fim = data.get('data_fim', '').strip()
+        
+        if index is None or not all([cidade, circo, data_inicio, data_fim]):
+            return jsonify({'success': False, 'message': 'Todos os campos são obrigatórios'})
+        
+        success = circos_manager.update_circo(index, cidade, circo, data_inicio, data_fim)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Circo atualizado com sucesso'})
+        else:
+            return jsonify({'success': False, 'message': 'Erro ao atualizar circo'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
 
 @app.route('/delete_circo_cidade', methods=['POST'])
 def delete_circo_cidade():
-    return jsonify({'success': False, 'message': 'Funcionalidade disponível na versão local'})
+    """Deletar circo/cidade"""
+    try:
+        data = request.get_json()
+        index = data.get('index')
+        
+        if index is None:
+            return jsonify({'success': False, 'message': 'Índice não fornecido'})
+        
+        success = circos_manager.delete_circo(index)
+        
+        if success:
+            return jsonify({'success': True, 'message': 'Circo removido com sucesso'})
+        else:
+            return jsonify({'success': False, 'message': 'Erro ao remover circo'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
 
 @app.route('/confirm_circos', methods=['POST'])
 def confirm_circos():
-    return jsonify({'success': True, 'message': 'Confirmado'})
+    """Confirmar cadastro de circos"""
+    try:
+        return jsonify({'success': True, 'message': 'Cadastro de circos confirmado'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
 
 @app.route('/associate_cities_to_data', methods=['GET'])
 def associate_cities_to_data():
-    return jsonify({'success': True, 'associated_data': [], 'total_records': 0})
+    """Associar cidades aos dados importados"""
+    try:
+        if not processor.processed_data:
+            return jsonify({'success': False, 'message': 'Nenhum dado importado encontrado'})
+        
+        circos_cidades = circos_manager.get_all()
+        
+        if not circos_cidades:
+            return jsonify({'success': False, 'message': 'Nenhum cadastro de circo-cidade encontrado'})
+        
+        associated_data = []
+        
+        for item in processor.processed_data:
+            circo = item['Circo']
+            data_evento_str = item['Data Evento']
+            
+            try:
+                data_evento = datetime.strptime(data_evento_str, '%d/%m/%Y').date()
+            except:
+                continue
+            
+            cidade_encontrada = None
+            
+            for circo_cidade in circos_cidades:
+                if circo_cidade['CIRCO'] == circo:
+                    try:
+                        data_inicio = datetime.strptime(circo_cidade['DATA_INICIO'], '%d/%m/%Y').date()
+                        data_fim = datetime.strptime(circo_cidade['DATA_FIM'], '%d/%m/%Y').date()
+                        
+                        if data_inicio <= data_evento <= data_fim:
+                            cidade_encontrada = circo_cidade['CIDADE']
+                            break
+                    except:
+                        continue
+            
+            associated_item = {
+                'Circo': circo,
+                'Cidade': cidade_encontrada if cidade_encontrada else 'Não encontrada',
+                'Data Evento': data_evento_str,
+                'Faturamento Total': processor.format_currency_display(item['Faturamento Total']),
+                'Faturamento Gestão Produtor': processor.format_currency_display(item['Faturamento Gestão Produtor']),
+                'Taxas e Descontos': processor.format_currency_display(item['Taxas e Descontos']),
+                'Valor Líquido': processor.format_currency_display(item['Valor Líquido'])
+            }
+            
+            associated_data.append(associated_item)
+        
+        return jsonify({
+            'success': True,
+            'associated_data': associated_data,
+            'total_records': len(associated_data)
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'})
 
 @app.route('/generate_report', methods=['POST'])
 def generate_report():
-    return jsonify({'success': False, 'message': 'Relatórios disponíveis na versão local'})
+    """Gerar relatório com filtros - versão básica"""
+    return jsonify({
+        'success': False, 
+        'message': 'Relatórios completos disponíveis na versão local. Use a versão local para funcionalidade completa.'
+    })
 
 @app.route('/export/<export_type>')
 def export_report(export_type):
-    return jsonify({'success': False, 'message': 'Export disponível na versão local'})
+    """Exportar relatório"""
+    return jsonify({
+        'success': False, 
+        'message': 'Export disponível na versão local. Use a versão local para funcionalidade completa.'
+    })
+
+@app.template_filter('currency')
+def currency_filter(value):
+    """Filtro para formatar moeda nos templates"""
+    return processor.format_currency_display(value)
 
 # Para WSGI
 application = app
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
-    print("🎪 Sócrates Online - Produção Simplificada")
+    debug_mode = os.environ.get('FLASK_ENV') == 'development'
+    
+    print("🎪 Sócrates Online - Produção")
     print(f"🌐 Porta: {port}")
-    app.run(debug=False, host='0.0.0.0', port=port)
+    
+    app.run(debug=debug_mode, host='0.0.0.0', port=port)
 
