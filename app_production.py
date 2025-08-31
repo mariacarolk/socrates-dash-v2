@@ -229,6 +229,9 @@ class SocratesProcessor:
 processor = SocratesProcessor()
 circos_manager = PostgreSQLManager()
 
+# Armazenar circos importados globalmente
+CIRCOS_IMPORTADOS = []
+
 print("🐘 ✅ Sócrates Online - PostgreSQL Ativo")
 
 # TODAS AS ROTAS IGUAIS AO app.py
@@ -276,6 +279,11 @@ def upload_file():
                 total_faturamento = sum([item['Faturamento Total'] for item in processor.processed_data])
                 total_liquido = sum([item['Valor Líquido'] for item in processor.processed_data])
                 
+                # SALVAR CIRCOS GLOBALMENTE para outras requisições
+                global CIRCOS_IMPORTADOS
+                CIRCOS_IMPORTADOS = circos_unicos.copy()
+                print(f"🎪 Circos salvos globalmente: {CIRCOS_IMPORTADOS}")
+                
                 # Preparar dados formatados
                 display_data = []
                 for item in processor.processed_data:
@@ -320,7 +328,8 @@ def get_circos_cidades():
         circos_data = circos_manager.get_all()
         
         # APENAS circos do relatório (importados do Excel)
-        circos_relatorio = processor.get_unique_circos() if processor.processed_data else []
+        circos_relatorio = processor.get_unique_circos() if processor.processed_data else CIRCOS_IMPORTADOS
+        print(f"🎪 Retornando circos: {circos_relatorio}")
         
         return jsonify({
             'success': True,
