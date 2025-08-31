@@ -229,8 +229,33 @@ class SocratesProcessor:
 processor = SocratesProcessor()
 circos_manager = PostgreSQLManager()
 
-# Armazenar circos importados globalmente
+# Armazenar circos importados globalmente (persistente)
 CIRCOS_IMPORTADOS = []
+
+# Cache simples para circos (persistente entre requisições)
+import threading
+circos_cache_lock = threading.Lock()
+
+def get_circos_from_cache():
+    """Obter circos do cache thread-safe"""
+    with circos_cache_lock:
+        return CIRCOS_IMPORTADOS.copy()
+
+def save_circos_to_cache(circos_list):
+    """Salvar circos no cache thread-safe"""
+    global CIRCOS_IMPORTADOS
+    with circos_cache_lock:
+        CIRCOS_IMPORTADOS = circos_list.copy()
+        print(f"💾 Circos salvos no cache: {CIRCOS_IMPORTADOS}")
+
+def add_circo_to_cache(circo_name):
+    """Adicionar circo ao cache se não existir"""
+    global CIRCOS_IMPORTADOS
+    with circos_cache_lock:
+        if circo_name not in CIRCOS_IMPORTADOS:
+            CIRCOS_IMPORTADOS.append(circo_name)
+            CIRCOS_IMPORTADOS.sort()
+            print(f"➕ Circo adicionado ao cache: {circo_name}")
 
 print("🐘 ✅ Sócrates Online - PostgreSQL Ativo")
 
@@ -279,10 +304,8 @@ def upload_file():
                 total_faturamento = sum([item['Faturamento Total'] for item in processor.processed_data])
                 total_liquido = sum([item['Valor Líquido'] for item in processor.processed_data])
                 
-                # SALVAR CIRCOS GLOBALMENTE para outras requisições
-                global CIRCOS_IMPORTADOS
-                CIRCOS_IMPORTADOS = circos_unicos.copy()
-                print(f"🎪 Circos salvos globalmente: {CIRCOS_IMPORTADOS}")
+                # SALVAR CIRCOS NO CACHE para outras requisições
+                save_circos_to_cache(circos_unicos)
                 
                 # Preparar dados formatados
                 display_data = []
@@ -327,9 +350,11 @@ def get_circos_cidades():
     try:
         circos_data = circos_manager.get_all()
         
-        # APENAS circos do relatório (importados do Excel)
-        circos_relatorio = processor.get_unique_circos() if processor.processed_data else CIRCOS_IMPORTADOS
+        # APENAS circos do relatório (importados do Excel) + cache
+        circos_relatorio = processor.get_unique_circos() if processor.processed_data else get_circos_from_cache()
         print(f"🎪 Retornando circos: {circos_relatorio}")
+        print(f"🔍 Dados processados: {len(processor.processed_data)}")
+        print(f"🔍 Cache circos: {get_circos_from_cache()}")
         
         return jsonify({
             'success': True,
@@ -356,6 +381,8 @@ def add_circo_cidade():
         success = circos_manager.add_circo(cidade, circo, data_inicio, data_fim)
         
         if success:
+            # Adicionar circo ao cache para manter na lista
+            add_circo_to_cache(circo)
             return jsonify({'success': True, 'message': 'Circo adicionado com sucesso'})
         else:
             return jsonify({'success': False, 'message': 'Erro ao adicionar circo'})
