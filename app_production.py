@@ -550,6 +550,7 @@ def generate_report():
     """Gerar relatório com filtros"""
     try:
         data = request.get_json()
+        print(f"📨 Requisição de relatório recebida: {data}")
         
         tipo_filtro = data.get('tipo_filtro', 'circo')
         data_inicio = datetime.strptime(data.get('data_inicio'), '%Y-%m-%d').date()
@@ -586,13 +587,7 @@ def generate_report():
             
             print(f"🏙️ Filtrando por cidades: {selected_cidades}")
             
-            # Verificar se há associações antes de processar
-            cidades_associadas = processor.filter_by_associated_cities(selected_cidades)
-            print(f"🔗 Cidades associadas encontradas: {len(cidades_associadas)}")
-            
-            if not cidades_associadas:
-                return jsonify({'success': False, 'message': 'Nenhuma associação encontrada. Faça primeiro a associação das cidades aos dados.'})
-            
+            # Gerar relatório por cidades diretamente
             report_data = processor.filter_and_generate_report_by_cities(selected_cidades, data_inicio, data_fim)
         
         if not report_data:
@@ -638,6 +633,9 @@ def generate_report():
         return jsonify(response_data)
         
     except Exception as e:
+        print(f"❌ ERRO ao gerar relatório: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'message': f'Erro ao gerar relatório: {str(e)}'})
 
 @app.route('/export/<export_type>')
