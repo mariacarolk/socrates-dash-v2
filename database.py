@@ -11,20 +11,20 @@ from datetime import datetime
 import csv
 import os
 
-# Usar DATABASE_URL do ambiente (Railway/Render) ou config local
-DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_URL')
+# Configuração do banco - priorizar variáveis de ambiente
+DATABASE_URL = (
+    os.environ.get('DATABASE_URL') or 
+    os.environ.get('POSTGRES_URL') or 
+    'postgresql://postgres:postgres@localhost:5432/socrates_online'
+)
 
-# Se não tiver DATABASE_URL do ambiente, usar config local
-if not DATABASE_URL:
-    try:
-        from config import DATABASE_URL as LOCAL_DATABASE_URL
-        DATABASE_URL = LOCAL_DATABASE_URL
-        print("📄 Usando DATABASE_URL local")
-    except ImportError:
-        DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/socrates_online'
-        print("⚠️ Usando DATABASE_URL padrão")
-else:
+# Log da configuração
+if 'DATABASE_URL' in os.environ:
     print("☁️ Usando DATABASE_URL da produção")
+elif 'POSTGRES_URL' in os.environ:
+    print("☁️ Usando POSTGRES_URL da produção")
+else:
+    print("📄 Usando DATABASE_URL local")
 
 class PostgreSQLManager:
     """Classe para gerenciar dados no PostgreSQL"""

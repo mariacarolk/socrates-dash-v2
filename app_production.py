@@ -7,29 +7,8 @@ Versão otimizada para deploy em servidores
 import os
 import logging
 
-# Tentar importar app com fallback
-try:
-    from app import app
-    print("✅ App completo carregado")
-except ImportError as e:
-    print(f"⚠️ Erro ao carregar app completo: {e}")
-    print("🔄 Carregando versão simplificada...")
-    
-    # Versão simplificada para Railway
-    from flask import Flask, render_template
-    
-    app = Flask(__name__)
-    app.secret_key = os.environ.get('SECRET_KEY', '6a5bb56c77797ae84352a9043ab0b7e04a8a86530cbc74f388b63607d99741fb')
-    
-    @app.route('/')
-    def index():
-        return render_template('index.html')
-    
-    @app.route('/upload', methods=['POST'])
-    def upload():
-        return {'success': False, 'message': 'Versão simplificada - funcionalidade limitada'}
-    
-    print("✅ App simplificado carregado")
+# Importar app diretamente
+from app import app
 
 # Configurar logging para produção
 if os.environ.get('FLASK_ENV') == 'production':

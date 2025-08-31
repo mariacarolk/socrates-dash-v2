@@ -33,13 +33,15 @@ from reportlab.lib.units import inch
 
 # PostgreSQL
 from database import PostgreSQLManager
-from config import SECRET_KEY, MAX_CONTENT_LENGTH, UPLOAD_FOLDER
 
 app = Flask(__name__)
-app.secret_key = SECRET_KEY
+app.secret_key = os.environ.get('SECRET_KEY', '6a5bb56c77797ae84352a9043ab0b7e04a8a86530cbc74f388b63607d99741fb')
 
 # Configurações
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
+UPLOAD_FOLDER = 'uploads'
+MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
