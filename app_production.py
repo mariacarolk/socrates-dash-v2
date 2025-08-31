@@ -8,7 +8,7 @@ import os
 import json
 import io
 from datetime import datetime, date
-from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for
+from flask import Flask, render_template, request, jsonify, send_file, flash, redirect, url_for, make_response
 from werkzeug.utils import secure_filename
 import pandas as pd
 import re
@@ -348,6 +348,103 @@ class SocratesProcessor:
         
         self.last_report_data = report_data
         return report_data
+
+# Funções auxiliares para exportação
+def create_excel_export(report_data):
+    """Cria arquivo Excel para download"""
+    output = io.BytesIO()
+    
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        # Converter dados para DataFrame
+        df = pd.DataFrame(report_data)
+        
+        # Escrever dados
+        df.to_excel(writer, sheet_name='Relatório', index=False)
+        
+        # Obter workbook e worksheet
+        workbook = writer.book
+        worksheet = writer.sheets['Relatório']
+        
+        # Formatar colunas
+        money_format = workbook.add_format({'num_format': 'R$ #,##0.00'})
+        header_format = workbook.add_format({'bold': True, 'bg_color': '#366092', 'font_color': 'white'})
+        
+        # Aplicar formatação no cabeçalho
+        for col_num, value in enumerate(df.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+        
+        # Ajustar largura das colunas
+        worksheet.set_column('A:A', 30)  # Circo/Cidade
+        worksheet.set_column('B:B', 25)  # Período
+        worksheet.set_column('C:G', 20)  # Valores
+    
+    output.seek(0)
+    return output
+
+def create_pdf_export(report_data):
+    """Cria arquivo PDF para download"""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter, landscape
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    
+    output = io.BytesIO()
+    doc = SimpleDocTemplate(output, pagesize=landscape(letter), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=18)
+    
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Título
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#1a5490'),
+        spaceAfter=30,
+        alignment=1  # Center
+    )
+    elements.append(Paragraph("Relatório Sócrates Online", title_style))
+    elements.append(Spacer(1, 20))
+    
+    # Preparar dados para tabela
+    table_data = [['Circo/Cidade', 'Período', 'Faturamento Total', 'Faturamento Gestão', 'Taxas e Descontos', 'Valor Líquido']]
+    
+    for item in report_data:
+        table_data.append([
+            item.get('Circo', ''),
+            item.get('Período', ''),
+            item.get('Faturamento Total', ''),
+            item.get('Faturamento Gestão Produtor', ''),
+            item.get('Taxas e Descontos', ''),
+            item.get('Valor Líquido', '')
+        ])
+    
+    # Criar tabela
+    table = Table(table_data, repeatRows=1)
+    
+    # Estilo da tabela
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#366092')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),  # Alinhar valores à direita
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')])
+    ]))
+    
+    elements.append(table)
+    
+    # Construir PDF
+    doc.build(elements)
+    output.seek(0)
+    return output
 
 # Instâncias globais
 processor = SocratesProcessor()
@@ -776,10 +873,35 @@ def generate_report():
 @app.route('/export/<export_type>')
 def export_report(export_type):
     """Exportar relatório"""
-    return jsonify({
-        'success': False, 
-        'message': 'Export disponível na versão local. Use a versão local para funcionalidade completa.'
-    })
+    try:
+        # Verificar se há dados de relatório
+        if not hasattr(processor, 'last_report_data') or not processor.last_report_data:
+            return jsonify({'success': False, 'message': 'Nenhum relatório gerado para exportar'})
+        
+        if export_type == 'excel':
+            # Gerar Excel
+            output = create_excel_export(processor.last_report_data)
+            
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            response.headers['Content-Disposition'] = 'attachment; filename=relatorio_socrates.xlsx'
+            return response
+            
+        elif export_type == 'pdf':
+            # Gerar PDF
+            output = create_pdf_export(processor.last_report_data)
+            
+            response = make_response(output.getvalue())
+            response.headers['Content-Type'] = 'application/pdf'
+            response.headers['Content-Disposition'] = 'attachment; filename=relatorio_socrates.pdf'
+            return response
+            
+        else:
+            return jsonify({'success': False, 'message': 'Tipo de exportação inválido'})
+            
+    except Exception as e:
+        print(f"❌ Erro ao exportar: {e}")
+        return jsonify({'success': False, 'message': f'Erro ao exportar: {str(e)}'})
 
 @app.template_filter('currency')
 def currency_filter(value):
