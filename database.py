@@ -9,7 +9,22 @@ import psycopg2
 import psycopg2.extras
 from datetime import datetime
 import csv
-from config import DATABASE_URL
+import os
+
+# Usar DATABASE_URL do ambiente (Railway/Render) ou config local
+DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_URL')
+
+# Se não tiver DATABASE_URL do ambiente, usar config local
+if not DATABASE_URL:
+    try:
+        from config import DATABASE_URL as LOCAL_DATABASE_URL
+        DATABASE_URL = LOCAL_DATABASE_URL
+        print("📄 Usando DATABASE_URL local")
+    except ImportError:
+        DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/socrates_online'
+        print("⚠️ Usando DATABASE_URL padrão")
+else:
+    print("☁️ Usando DATABASE_URL da produção")
 
 class PostgreSQLManager:
     """Classe para gerenciar dados no PostgreSQL"""
@@ -25,11 +40,31 @@ class PostgreSQLManager:
         try:
             print("🔗 Conectando ao PostgreSQL...")
             print(f"🔗 URL: {DATABASE_URL[:50]}...")
+            print(f"🌐 Ambiente: {os.environ.get('RAILWAY_ENVIRONMENT', 'local')}")
+            
             self.connection = psycopg2.connect(DATABASE_URL)
             print("✅ Conectado ao PostgreSQL!")
+            
+            # Testar conexão
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT 1")
+            cursor.close()
+            print("✅ Conexão PostgreSQL testada e funcionando")
                 
         except Exception as e:
             print(f"❌ Erro ao conectar PostgreSQL: {e}")
+            print(f"🔍 DATABASE_URL presente: {'DATABASE_URL' in os.environ}")
+            print(f"🔍 Variáveis disponíveis: {[k for k in os.environ.keys() if 'DATA' in k.upper()]}")
+            
+            # Verificar se está em produção
+            if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RENDER'):
+                print("🚨 ATENÇÃO: PostgreSQL não configurado em produção!")
+                print("📋 Para corrigir no Railway:")
+                print("   1. Dashboard → Add Service → Database → PostgreSQL")
+                print("   2. Railway criará DATABASE_URL automaticamente")
+                print("   3. Re-deploy acontecerá automaticamente")
+                print("⚠️ Enquanto isso, operações de CRUD não funcionarão")
+            
             self.connection = None
     
     def create_tables(self):
@@ -159,11 +194,17 @@ class PostgreSQLManager:
     
     def add_circo(self, cidade, circo, data_inicio, data_fim):
         """Adicionar novo registro"""
+        print(f"🔄 Tentando adicionar: {circo} em {cidade} ({data_inicio} - {data_fim})")
+        print(f"🔍 Conexão disponível: {self.connection is not None}")
+        
         if not self.connection:
+            print("❌ Sem conexão PostgreSQL - operação cancelada")
             return False
         
         try:
             cursor = self.connection.cursor()
+            print("📝 Executando INSERT no PostgreSQL...")
+            
             cursor.execute("""
                 INSERT INTO circos_cidades (cidade, circo, data_inicio, data_fim)
                 VALUES (%s, %s, %s, %s)
@@ -181,6 +222,8 @@ class PostgreSQLManager:
             
         except Exception as e:
             print(f"❌ Erro ao adicionar circo: {e}")
+            import traceback
+            traceback.print_exc()
             if self.connection:
                 self.connection.rollback()
             return False
