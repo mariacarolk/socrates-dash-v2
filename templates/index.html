@@ -883,9 +883,20 @@
         });
 
         function generateReport() {
+            console.log('🚀 Iniciando geração de relatório...');
+            
             const tipoFiltro = document.querySelector('input[name="tipoFiltro"]:checked').value;
             const dataInicio = document.getElementById('dataInicio').value;
             const dataFim = document.getElementById('dataFim').value;
+            
+            console.log('📋 Tipo de filtro:', tipoFiltro);
+            console.log('📅 Data início:', dataInicio);
+            console.log('📅 Data fim:', dataFim);
+            
+            if (!dataInicio || !dataFim) {
+                showAlert('Selecione as datas de início e fim!', 'warning');
+                return;
+            }
             
             let data = {
                 tipo_filtro: tipoFiltro,
@@ -897,6 +908,8 @@
                 const selectCircos = document.getElementById('circosSelect');
                 const selectedCircos = Array.from(selectCircos.selectedOptions).map(option => option.value);
                 
+                console.log('🎪 Circos selecionados:', selectedCircos);
+                
                 if (selectedCircos.length === 0) {
                     showAlert('Selecione pelo menos um circo!', 'warning');
                     return;
@@ -907,6 +920,8 @@
                 const selectCidades = document.getElementById('cidadesSelect');
                 const selectedCidades = Array.from(selectCidades.selectedOptions).map(option => option.value);
                 
+                console.log('🏙️ Cidades selecionadas:', selectedCidades);
+                
                 if (selectedCidades.length === 0) {
                     showAlert('Selecione pelo menos uma cidade!', 'warning');
                     return;
@@ -915,6 +930,8 @@
                 data.cidades = selectedCidades;
             }
 
+            console.log('📤 Enviando dados para o servidor:', data);
+            
             fetch('/generate_report', {
                 method: 'POST',
                 headers: {
@@ -922,8 +939,16 @@
                 },
                 body: JSON.stringify(data)
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log('📥 Resposta recebida:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
+                console.log('📊 Resultado do relatório:', data);
+                
                 if (data.success) {
                     showResults(data);
                 } else {
@@ -931,6 +956,7 @@
                 }
             })
             .catch(error => {
+                console.error('❌ Erro ao gerar relatório:', error);
                 showAlert('Erro ao gerar relatório: ' + error.message, 'danger');
             });
         }
