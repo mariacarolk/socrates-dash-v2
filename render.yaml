@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: socrates-online
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app_production.py
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+    disk:
+      name: socrates-data
+      mountPath: /opt/render/project/src
+      sizeGB: 1

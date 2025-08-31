@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Sócrates Online - Importação de Relatório de Faturamento de Eventos</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/logo_grande.png') }}">
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <!-- Plotly -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
+    <style>
+        body {
+            background-color: #f4f7f6;
+        }
+
+        .main-header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #1a237e 100%);
+            color: white;
+            padding: 3.5rem 0;
+            margin-bottom: 2rem;
+            border-bottom: 5px solid #0d47a1;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+        }
+        
+        .logo-brand {
+            max-height: 180px;
+            width: auto;
+            transition: transform 0.3s ease, filter 0.3s ease;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+        }
+
+        .logo-brand:hover {
+            transform: scale(1.05);
+            filter: drop-shadow(0 6px 12px rgba(0,0,0,0.4));
+        }
+        
+        .display-4 {
+            font-weight: 300;
+        }
+        
+        .lead {
+            font-weight: 300;
+            opacity: 0.9;
+        }
+
+        .card-custom {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: none;
+            border-radius: 10px;
+            transition: transform 0.2s;
+        }
+        
+        .card-custom:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .upload-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 3rem;
+            text-align: center;
+            background: #f8f9fa;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #e7f1ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e7f1ff;
+            transform: scale(1.02);
+        }
+        
+        .metric-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid;
+        }
+        
+        .metric-total { border-left-color: #28a745; }
+        .metric-gestao { border-left-color: #ffc107; }
+        .metric-taxas { border-left-color: #dc3545; }
+        .metric-web { border-left-color: #17a2b8; }
+        .metric-circos { border-left-color: #6f42c1; }
+        
+        .table-responsive {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .btn-export {
+            background: linear-gradient(45deg, #1e3c72, #2a5298);
+            border: none;
+            color: white;
+            transition: all 0.3s;
+        }
+        
+        .btn-export:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(30, 60, 114, 0.4);
+            color: white;
+            background: linear-gradient(45deg, #2a5298, #1a237e);
+        }
+        
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+        }
+        
+        .alert-custom {
+            border-radius: 10px;
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        @media (max-width: 768px) {
+            .logo-brand {
+                max-height: 120px !important;
+                margin-bottom: 1rem;
+                margin-right: 0 !important;
+            }
+            
+            .display-4 {
+                font-size: 2rem;
+            }
+            
+            .main-header .row {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .main-header .col-auto {
+                margin-bottom: 0.5rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .logo-brand {
+                max-height: 100px !important;
+            }
+            
+            .display-4 {
+                font-size: 1.8rem;
+            }
+            
+            .lead {
+                font-size: 1rem;
+            }
+        }
+        
+        .filters-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="main-header">
+        <div class="container">
+            <div class="row align-items-center justify-content-center">
+                <div class="col-auto">
+                    <img src="{{ url_for('static', filename='img/logo_grande.png') }}" 
+                         alt="Sócrates Online" 
+                         class="logo-brand me-4">
+                </div>
+                <div class="col-auto text-center">
+                    <h1 class="display-4 mb-0">
+                        Sócrates Online
+                    </h1>
+                    <p class="lead mb-0">Importação de Relatório de Faturamento de Eventos</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Upload Section -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card card-custom mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-cloud-upload me-2"></i>
+                            1. Importar Arquivo Excel
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="upload-area" id="uploadArea">
+                            <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+                            <i class="bi bi-cloud-upload" style="font-size: 3rem; color: #6c757d;"></i>
+                            <h4 class="mt-3">Clique ou arraste o arquivo Excel aqui</h4>
+                            <p class="text-muted">Arquivos suportados: .xlsx, .xls (máx. 16MB)</p>
+                            <button class="btn btn-primary btn-lg" onclick="event.stopPropagation(); document.getElementById('fileInput').click()">
+                                <i class="bi bi-folder2-open me-2"></i>
+                                Escolher Arquivo
+                            </button>
+                        </div>
+                        
+                        <!-- Progress -->
+                        <div id="uploadProgress" class="mt-3" style="display: none;">
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 100%"></div>
+                            </div>
+                            <p class="text-center mt-2">Processando arquivo...</p>
+                        </div>
+                        
+                        <!-- File Info -->
+                        <div id="fileInfo" class="mt-3" style="display: none;">
+                            <div class="alert alert-success alert-custom" role="alert">
+                                <i class="bi bi-check-circle me-2"></i>
+                                <span id="fileInfoText"></span>
+                            </div>
+                            
+                            <!-- Stats Cards -->
+                            <div class="row" id="statsCards">
+                                <div class="col-md-3">
+                                    <div class="metric-card metric-total">
+                                        <i class="bi bi-bar-chart-fill" style="font-size: 2rem; color: #28a745;"></i>
+                                        <h3 id="totalRegistros" class="mt-2">0</h3>
+                                        <p class="mb-0">Registros</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="metric-card metric-circos">
+                                        <i class="bi bi-building" style="font-size: 2rem; color: #6f42c1;"></i>
+                                        <h3 id="totalCircos" class="mt-2">0</h3>
+                                        <p class="mb-0">Circos</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="metric-card metric-total">
+                                        <i class="bi bi-currency-dollar" style="font-size: 2rem; color: #28a745;"></i>
+                                        <h3 id="totalFaturamento" class="mt-2">R$ 0,00</h3>
+                                        <p class="mb-0">Faturamento Total</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Imported Data Section -->
+        <div class="row" id="importedDataSection" style="display: none;">
+            <div class="col-12">
+                <div class="card card-custom mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-table me-2"></i>
+                            2. Dados Importados 
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-dark sticky-top">
+                                    <tr>
+                                        <th>Circo</th>
+                                        <th>Cidade</th>
+                                        <th>Data Evento</th>
+                                        <th>Faturamento Total</th>
+                                        <th>Valor líquido total recebido em dinheiro</th>
+                                        <th>Taxas e Descontos</th>
+                                        <th>Valor Líquido</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="importedDataTableBody">
+                                    <!-- Data will be populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Circos CRUD Section -->
+        <div class="row" id="circosCrudSection" style="display: none;">
+            <div class="col-12">
+                <div class="card card-custom mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="bi bi-geo-alt me-2"></i>
+                            3. Cadastro de Circos e Cidades
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Tabela de Circos -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6><i class="bi bi-list-ul me-2"></i>Circos Cadastrados</h6>
+                                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                                    <table class="table table-striped table-hover">
+                                        <thead class="table-dark sticky-top">
+                                            <tr>
+                                                <th>Cidade</th>
+                                                <th>Circo</th>
+                                                <th>Data Início</th>
+                                                <th>Data Fim</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="circosCrudTableBody">
+                                            <!-- Data will be populated dynamically -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Formulário para Adicionar/Editar -->
+                        <div class="row">
+                            <div class="col-12">
+                                <h6><i class="bi bi-plus-circle me-2"></i>Adicionar/Editar Circo</h6>
+                                <form id="circoForm">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <label for="cidadeInput" class="form-label">Cidade:</label>
+                                            <input type="text" class="form-control" id="cidadeInput" placeholder="Ex: São Paulo" required>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label for="circoSelect" class="form-label">Circo:</label>
+                                            <select class="form-select" id="circoSelectCrud" required>
+                                                <option value="">Selecione um circo</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label for="dataInicioInput" class="form-label">Data Início:</label>
+                                            <input type="date" class="form-control" id="dataInicioInput" required>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <label for="dataFimInput" class="form-label">Data Fim:</label>
+                                            <input type="date" class="form-control" id="dataFimInput" required>
+                                        </div>
+                                        <div class="col-md-2 d-flex align-items-end">
+                                            <button type="submit" class="btn btn-success me-2" id="saveCircoBtn">
+                                                <i class="bi bi-check-lg"></i> Salvar
+                                            </button>
+                                            <button type="button" class="btn btn-secondary" id="cancelCircoBtn" style="display: none;">
+                                                <i class="bi bi-x-lg"></i> Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Botão Confirmar -->
+                        <div class="row mt-4">
+                            <div class="col-12 text-center">
+                                <button type="button" class="btn btn-primary btn-lg" id="confirmCircosBtn">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    Confirmar Cadastro e Continuar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Section -->
+        <div class="row" id="filtersSection" style="display: none;">
+            <div class="col-12">
+                <div class="card card-custom mb-4">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-funnel me-2"></i>
+                            4. Filtros para Relatório
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Tipo de Filtro -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <h6><i class="bi bi-filter me-2"></i>Tipo de Relatório</h6>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="tipoFiltro" id="filtroCirco" value="circo" checked>
+                                    <label class="form-check-label" for="filtroCirco">
+                                        <i class="bi bi-bullseye me-1"></i>Filtrar por Circo
+                                    </label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="tipoFiltro" id="filtroCidade" value="cidade">
+                                    <label class="form-check-label" for="filtroCidade">
+                                        <i class="bi bi-geo-alt me-1"></i>Filtrar por Cidade
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <form id="reportForm">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <label for="circosSelect" class="form-label">Selecionar Circos:</label>
+                                    <select class="form-select" id="circosSelect" multiple size="5">
+                                        <!-- Options will be populated dynamically -->
+                                    </select>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllCircos()">
+                                            Selecionar Todos
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearCircosSelection()">
+                                            Limpar Seleção
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-4" style="display: none;">
+                                    <label for="cidadesSelect" class="form-label">Selecionar Cidades:</label>
+                                    <select class="form-select" id="cidadesSelect" multiple size="5">
+                                        <!-- Options will be populated dynamically -->
+                                    </select>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllCidades()">
+                                            Selecionar Todas
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearCidadesSelection()">
+                                            Limpar Seleção
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="row">
+                                        <div class="col-12">
+                                            <label for="dataInicio" class="form-label">Data Inicial:</label>
+                                            <input type="date" class="form-control" id="dataInicio" value="2025-01-01">
+                                        </div>
+                                    </div>
+                                    <div class="row mt-2">
+                                        <div class="col-12">
+                                            <label for="dataFim" class="form-label">Data Final:</label>
+                                            <input type="date" class="form-control" id="dataFim" value="2025-12-31">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <button type="submit" class="btn btn-success w-100">
+                                            <i class="bi bi-graph-up me-2"></i>
+                                            Gerar Relatório
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" style="display: none;">
+            <!-- Metrics -->
+            <div class="row mb-4">
+                <div class="col-md-2">
+                    <div class="metric-card metric-total">
+                        <i class="bi bi-cash-stack" style="font-size: 1.5rem; color: #28a745;"></i>
+                        <h4 id="metricTotal" class="mt-2">R$ 0,00</h4>
+                        <p class="mb-0 small">Faturamento Total</p>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="metric-card metric-gestao">
+                        <i class="bi bi-person-gear" style="font-size: 1.5rem; color: #ffc107;"></i>
+                        <h4 id="metricGestao" class="mt-2">R$ 0,00</h4>
+                        <p class="mb-0 small">Valor líquido total recebido em dinheiro</p>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="metric-card metric-taxas">
+                        <i class="bi bi-receipt" style="font-size: 1.5rem; color: #dc3545;"></i>
+                        <h4 id="metricTaxas" class="mt-2">R$ 0,00</h4>
+                        <p class="mb-0 small">Taxas e Descontos</p>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="metric-card metric-web">
+                        <i class="bi bi-globe" style="font-size: 1.5rem; color: #17a2b8;"></i>
+                        <h4 id="metricLiquido" class="mt-2">R$ 0,00</h4>
+                        <p class="mb-0 small">Valor Líquido</p>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="metric-card metric-circos">
+                        <i class="bi bi-building" style="font-size: 1.5rem; color: #6f42c1;"></i>
+                        <h4 id="metricCircos" class="mt-2">0</h4>
+                        <p class="mb-0 small">Circos</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="card card-custom mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-table me-2"></i>
+                        Detalhamento por Circo
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Circo</th>
+                                    <th>Período</th>
+                                    <th>Faturamento Total</th>
+                                    <th>Valor líquido total recebido em dinheiro</th>
+                                    <th>Taxas e Descontos</th>
+                                    <th>Valor Líquido</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportTableBody">
+                                <!-- Data will be populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="chart-container">
+                        <h5 class="mb-3">
+                            <i class="bi bi-pie-chart me-2"></i>
+                            Distribuição Valor líquido em dinheiro vs Valor Líquido
+                        </h5>
+                        <div id="chartPie"></div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="chart-container">
+                        <h5 class="mb-3">
+                            <i class="bi bi-graph-up me-2"></i>
+                            Comparativo Valor líquido em dinheiro vs Valor Líquido
+                        </h5>
+                        <div id="chartComparison"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Section -->
+            <div class="card card-custom">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="bi bi-download me-2"></i>
+                        Exportar Relatório
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button class="btn btn-export btn-lg w-100 mb-2" onclick="exportReport('excel')">
+                                <i class="bi bi-file-earmark-spreadsheet me-2"></i>
+                                Baixar Excel
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <button class="btn btn-export btn-lg w-100 mb-2" onclick="exportReport('pdf')">
+                                <i class="bi bi-file-earmark-pdf me-2"></i>
+                                Baixar PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-5 py-4 bg-light">
+        <div class="container text-center">
+            <p class="text-muted mb-0">Sócrates Online © 2025 - Importação de Relatório de Faturamento de Eventos</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JavaScript -->
+    <script>
+        let currentData = null;
+        let isUploading = false; // Flag para prevenir uploads duplos
+
+        // Upload functionality
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function handleFile(file) {
+            // Verificar se já está fazendo upload
+            if (isUploading) {
+                console.log('Upload já em andamento, ignorando...');
+                return;
+            }
+            
+            console.log('Arquivo selecionado:', file.name, 'Tamanho:', file.size);
+            
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                showAlert('Apenas arquivos Excel (.xlsx, .xls) são permitidos!', 'danger');
+                return;
+            }
+            
+            if (file.size > 16 * 1024 * 1024) {
+                showAlert('Arquivo muito grande! Máximo 16MB.', 'danger');
+                return;
+            }
+            
+            uploadFile(file);
+        }
+
+        function uploadFile(file) {
+            console.log('Iniciando upload do arquivo:', file.name);
+            
+            // Definir flag de upload em andamento
+            isUploading = true;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            document.getElementById('uploadProgress').style.display = 'block';
+            document.getElementById('fileInfo').style.display = 'none';
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Resposta do servidor:', data);
+                document.getElementById('uploadProgress').style.display = 'none';
+                isUploading = false; // Reset da flag
+                
+                if (data.success) {
+                    console.log('Upload bem-sucedido:', data.stats);
+                    console.log('Dados importados recebidos:', data.imported_data);
+                    console.log('Quantidade de registros:', data.imported_data ? data.imported_data.length : 0);
+                    
+                    showFileInfo(data.message, data.stats);
+                    
+                    // Mostrar dados importados primeiro (Seção 2)
+                    if (data.imported_data && data.imported_data.length > 0) {
+                        showImportedData(data.imported_data);
+                        document.getElementById('importedDataSection').style.display = 'block';
+                    }
+                    
+                    // Carregar seção de CRUD de circos (Seção 3)
+                    console.log('🎪 Tentando carregar CRUD de circos...');
+                    const crudSection = document.getElementById('circosCrudSection');
+                    console.log('🔍 Elemento circosCrudSection encontrado:', crudSection);
+                    
+                    if (crudSection) {
+                        console.log('✅ Mostrando seção CRUD...');
+                        crudSection.style.display = 'block';
+                        loadCircosCrud();
+                    } else {
+                        console.error('❌ Elemento circosCrudSection NÃO encontrado no DOM!');
+                    }
+                    
+                    populateCircosSelect(data.stats.circos);
+                } else {
+                    console.error('Erro no processamento:', data.message);
+                    showAlert(data.message, 'danger');
+                }
+                
+                // Limpar o input para permitir seleção do mesmo arquivo novamente
+                fileInput.value = '';
+            })
+            .catch(error => {
+                console.error('Erro no upload:', error);
+                document.getElementById('uploadProgress').style.display = 'none';
+                isUploading = false; // Reset da flag em caso de erro
+                showAlert('Erro ao enviar arquivo: ' + error.message, 'danger');
+            });
+        }
+
+        function showFileInfo(message, stats) {
+            document.getElementById('fileInfoText').textContent = message;
+            document.getElementById('totalRegistros').textContent = stats.total_registros;
+            document.getElementById('totalCircos').textContent = stats.total_circos;
+            document.getElementById('totalFaturamento').textContent = stats.total_faturamento;
+            document.getElementById('fileInfo').style.display = 'block';
+        }
+
+        function showImportedData(importedData) {
+            console.log('showImportedData chamada com:', importedData);
+            
+            const tbody = document.getElementById('importedDataTableBody');
+            console.log('Elemento tbody encontrado:', tbody);
+            
+            if (!tbody) {
+                console.error('Elemento importedDataTableBody não encontrado!');
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            
+            if (!importedData || importedData.length === 0) {
+                console.error('Nenhum dado para exibir');
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum dado encontrado</td></tr>';
+                return;
+            }
+            
+            importedData.forEach((item, index) => {
+                console.log(`Processando item ${index}:`, item);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.Circo || 'N/A'}</td>
+                    <td>Aguardando associação...</td>
+                    <td>${item['Data Evento'] || 'N/A'}</td>
+                    <td>${item['Faturamento Total'] || 'N/A'}</td>
+                    <td>${item['Faturamento Gestão Produtor'] || 'N/A'}</td>
+                    <td>${item['Taxas e Descontos'] || 'N/A'}</td>
+                    <td>${item['Valor Líquido'] || 'N/A'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            console.log(`Tabela de dados importados preenchida com ${importedData.length} registros`);
+        }
+
+        function populateCircosSelect(circos) {
+            const select = document.getElementById('circosSelect');
+            select.innerHTML = '';
+            circos.forEach(circo => {
+                const option = document.createElement('option');
+                option.value = circo;
+                option.textContent = circo;
+                option.selected = true;
+                select.appendChild(option);
+            });
+        }
+
+        function selectAllCircos() {
+            const select = document.getElementById('circosSelect');
+            for (let option of select.options) {
+                option.selected = true;
+            }
+        }
+
+        function clearCircosSelection() {
+            const select = document.getElementById('circosSelect');
+            for (let option of select.options) {
+                option.selected = false;
+            }
+        }
+
+        function selectAllCidades() {
+            const select = document.getElementById('cidadesSelect');
+            for (let option of select.options) {
+                option.selected = true;
+            }
+        }
+
+        function clearCidadesSelection() {
+            const select = document.getElementById('cidadesSelect');
+            for (let option of select.options) {
+                option.selected = false;
+            }
+        }
+
+        function populateCidadesSelect() {
+            console.log('🏙️ Populando select de cidades...');
+            
+            fetch('/get_circos_cidades')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const cidadesUnicas = [...new Set(data.circos_cidades.map(item => item.CIDADE))].sort();
+                        const select = document.getElementById('cidadesSelect');
+                        select.innerHTML = '';
+                        
+                        cidadesUnicas.forEach(cidade => {
+                            const option = document.createElement('option');
+                            option.value = cidade;
+                            option.textContent = cidade;
+                            option.selected = true; // Selecionar todas por padrão
+                            select.appendChild(option);
+                        });
+                        
+                        console.log(`✅ ${cidadesUnicas.length} cidades carregadas no filtro`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar cidades para filtro:', error);
+                });
+        }
+
+        // Controlar visibilidade dos filtros
+        document.getElementById('filtroCirco').addEventListener('change', function() {
+            if (this.checked) {
+                document.getElementById('circosSelect').closest('.col-md-4').style.display = 'block';
+                document.getElementById('cidadesSelect').closest('.col-md-4').style.display = 'none';
+            }
+        });
+
+        document.getElementById('filtroCidade').addEventListener('change', function() {
+            if (this.checked) {
+                document.getElementById('circosSelect').closest('.col-md-4').style.display = 'none';
+                document.getElementById('cidadesSelect').closest('.col-md-4').style.display = 'block';
+            }
+        });
+
+        // Report generation
+        document.getElementById('reportForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            generateReport();
+        });
+
+        function generateReport() {
+            const tipoFiltro = document.querySelector('input[name="tipoFiltro"]:checked').value;
+            const dataInicio = document.getElementById('dataInicio').value;
+            const dataFim = document.getElementById('dataFim').value;
+            
+            let data = {
+                tipo_filtro: tipoFiltro,
+                data_inicio: dataInicio,
+                data_fim: dataFim
+            };
+
+            if (tipoFiltro === 'circo') {
+                const selectCircos = document.getElementById('circosSelect');
+                const selectedCircos = Array.from(selectCircos.selectedOptions).map(option => option.value);
+                
+                if (selectedCircos.length === 0) {
+                    showAlert('Selecione pelo menos um circo!', 'warning');
+                    return;
+                }
+                
+                data.circos = selectedCircos;
+            } else {
+                const selectCidades = document.getElementById('cidadesSelect');
+                const selectedCidades = Array.from(selectCidades.selectedOptions).map(option => option.value);
+                
+                if (selectedCidades.length === 0) {
+                    showAlert('Selecione pelo menos uma cidade!', 'warning');
+                    return;
+                }
+                
+                data.cidades = selectedCidades;
+            }
+
+            fetch('/generate_report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showResults(data);
+                } else {
+                    showAlert(data.message, 'warning');
+                }
+            })
+            .catch(error => {
+                showAlert('Erro ao gerar relatório: ' + error.message, 'danger');
+            });
+        }
+
+        function showResults(data) {
+            currentData = data;
+            
+            // Determinar tipo de filtro (usar do backend se disponível)
+            const tipoFiltro = data.tipo_filtro || document.querySelector('input[name="tipoFiltro"]:checked').value;
+            const labelType = tipoFiltro === 'cidade' ? 'Cidade' : 'Circo';
+            
+            // Update metrics
+            document.getElementById('metricTotal').textContent = data.stats.total_geral;
+            document.getElementById('metricGestao').textContent = data.stats.total_gestao;
+            document.getElementById('metricTaxas').textContent = data.stats.total_taxas;
+            document.getElementById('metricLiquido').textContent = data.stats.total_liquido;
+            document.getElementById('metricCircos').textContent = data.stats.total_circos;
+            
+            // Update table header and title
+            const tableHeader = document.querySelector('#reportTableBody').closest('.card').querySelector('.card-header h5');
+            tableHeader.innerHTML = `<i class="bi bi-table me-2"></i>Detalhamento por ${labelType}`;
+            
+            const tableHeaderCell = document.querySelector('#reportTableBody').closest('table').querySelector('thead th:first-child');
+            tableHeaderCell.textContent = labelType;
+            
+            // Update table
+            const tbody = document.getElementById('reportTableBody');
+            tbody.innerHTML = '';
+            data.data.forEach(item => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${item.Circo}</td>
+                    <td>${item.Período}</td>
+                    <td>${item['Faturamento Total']}</td>
+                    <td>${item['Faturamento Gestão Produtor']}</td>
+                    <td>${item['Taxas e Descontos']}</td>
+                    <td>${item['Valor Líquido']}</td>
+                `;
+            });
+            
+            // Show charts
+
+            Plotly.newPlot('chartPie', JSON.parse(data.charts.pie));
+            Plotly.newPlot('chartComparison', JSON.parse(data.charts.comparison));
+            
+            // Show results section
+            document.getElementById('resultsSection').style.display = 'block';
+            
+            // Scroll to results
+            document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function exportReport(type) {
+            if (!currentData) {
+                showAlert('Gere um relatório primeiro!', 'warning');
+                return;
+            }
+            
+            window.open(`/export/${type}`, '_blank');
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show alert-custom`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.container').firstChild);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+        // ================================
+        // FUNÇÕES DO CRUD DE CIRCOS
+        // ================================
+
+        let currentEditIndex = -1;
+
+        function loadCircosCrud() {
+            console.log('🔄 Carregando CRUD de circos...');
+            console.log('🌐 Fazendo fetch para /get_circos_cidades');
+            
+            fetch('/get_circos_cidades')
+                .then(response => {
+                    console.log('📡 Resposta recebida:', response);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📋 Dados do CRUD recebidos:', data);
+                    if (data.success) {
+                        console.log('✅ Sucesso! Dados de circos:', data.circos_cidades);
+                        console.log('🎪 Circos do relatório:', data.circos_relatorio);
+                        populateCircosCrudTable(data.circos_cidades);
+                        populateCircoSelectCrud(data.circos_relatorio);
+                    } else {
+                        console.error('❌ Erro na resposta:', data.message);
+                        showAlert('Erro ao carregar dados de circos: ' + data.message, 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('💥 Erro no fetch do CRUD:', error);
+                    showAlert('Erro ao carregar dados de circos', 'danger');
+                });
+        }
+
+        function populateCircosCrudTable(circosData) {
+            const tbody = document.getElementById('circosCrudTableBody');
+            tbody.innerHTML = '';
+            
+            circosData.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.CIDADE}</td>
+                    <td>${item.CIRCO}</td>
+                    <td>${item.DATA_INICIO}</td>
+                    <td>${item.DATA_FIM}</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning me-1" onclick="editCirco(${index})">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteCirco(${index})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            console.log(`Tabela CRUD preenchida com ${circosData.length} registros`);
+        }
+
+        function populateCircoSelectCrud(circosRelatorio) {
+            const select = document.getElementById('circoSelectCrud');
+            
+            // Limpar opções existentes (exceto a primeira)
+            while (select.children.length > 1) {
+                select.removeChild(select.lastChild);
+            }
+            
+            // Adicionar circos do relatório
+            circosRelatorio.forEach(circo => {
+                const option = document.createElement('option');
+                option.value = circo;
+                option.textContent = circo;
+                select.appendChild(option);
+            });
+        }
+
+        function editCirco(index) {
+            currentEditIndex = index;
+            
+            // Buscar dados atuais
+            fetch('/get_circos_cidades')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.circos_cidades[index]) {
+                        const item = data.circos_cidades[index];
+                        
+                        document.getElementById('cidadeInput').value = item.CIDADE;
+                        document.getElementById('circoSelectCrud').value = item.CIRCO;
+                        document.getElementById('dataInicioInput').value = formatDateForInput(item.DATA_INICIO);
+                        document.getElementById('dataFimInput').value = formatDateForInput(item.DATA_FIM);
+                        
+                        document.getElementById('saveCircoBtn').innerHTML = '<i class="bi bi-check-lg"></i> Atualizar';
+                        document.getElementById('cancelCircoBtn').style.display = 'inline-block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar dados para edição:', error);
+                    showAlert('Erro ao carregar dados para edição', 'danger');
+                });
+        }
+
+        function deleteCirco(index) {
+            if (confirm('Tem certeza que deseja remover este circo?')) {
+                fetch('/delete_circo_cidade', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ index: index })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showAlert(data.message, 'success');
+                        loadCircosCrud();
+                    } else {
+                        showAlert(data.message, 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao deletar:', error);
+                    showAlert('Erro ao deletar circo', 'danger');
+                });
+            }
+        }
+
+        function formatDateForInput(dateStr) {
+            // Converter de DD/MM/YYYY para YYYY-MM-DD
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+            return dateStr;
+        }
+
+        function formatDateForSave(dateStr) {
+            // Converter de YYYY-MM-DD para DD/MM/YYYY
+            const parts = dateStr.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+            return dateStr;
+        }
+
+        function cancelCircoEdit() {
+            currentEditIndex = -1;
+            document.getElementById('circoForm').reset();
+            document.getElementById('saveCircoBtn').innerHTML = '<i class="bi bi-check-lg"></i> Salvar';
+            document.getElementById('cancelCircoBtn').style.display = 'none';
+        }
+
+        // Event Listeners
+        document.getElementById('circoForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const cidade = document.getElementById('cidadeInput').value.trim();
+            const circo = document.getElementById('circoSelectCrud').value;
+            const dataInicio = formatDateForSave(document.getElementById('dataInicioInput').value);
+            const dataFim = formatDateForSave(document.getElementById('dataFimInput').value);
+            
+            if (!cidade || !circo || !dataInicio || !dataFim) {
+                showAlert('Todos os campos são obrigatórios', 'warning');
+                return;
+            }
+            
+            const url = currentEditIndex >= 0 ? '/update_circo_cidade' : '/add_circo_cidade';
+            const payload = { cidade, circo, data_inicio: dataInicio, data_fim: dataFim };
+            
+            if (currentEditIndex >= 0) {
+                payload.index = currentEditIndex;
+            }
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(data.message, 'success');
+                    cancelCircoEdit();
+                    loadCircosCrud();
+                } else {
+                    showAlert(data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao salvar:', error);
+                showAlert('Erro ao salvar circo', 'danger');
+            });
+        });
+
+        document.getElementById('cancelCircoBtn').addEventListener('click', cancelCircoEdit);
+
+        document.getElementById('confirmCircosBtn').addEventListener('click', function() {
+            fetch('/confirm_circos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert('Cadastro confirmado! Gerando associação cidade-circo...', 'success');
+                    
+                    // Fazer associação e mostrar dados importados
+                    associateAndShowImportedData();
+                    
+                    // Mostrar seção de filtros
+                    document.getElementById('filtersSection').style.display = 'block';
+                } else {
+                    showAlert(data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao confirmar:', error);
+                showAlert('Erro ao confirmar cadastro', 'danger');
+            });
+        });
+
+        function associateAndShowImportedData() {
+            console.log('🔗 Iniciando associação cidade-circo...');
+            
+            fetch('/associate_cities_to_data')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('✅ Associação realizada:', data.associated_data);
+                        showImportedDataWithCities(data.associated_data);
+                        document.getElementById('importedDataSection').style.display = 'block';
+                        
+                        // Popular filtro de cidades
+                        populateCidadesSelect();
+                        
+                        showAlert('Associação concluída! Dados com cidades exibidos.', 'success');
+                    } else {
+                        showAlert('Erro na associação: ' + data.message, 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro na associação:', error);
+                    showAlert('Erro ao fazer associação cidade-circo', 'danger');
+                });
+        }
+
+        function showImportedDataWithCities(associatedData) {
+            const tbody = document.getElementById('importedDataTableBody');
+            tbody.innerHTML = '';
+            
+            if (!associatedData || associatedData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum dado associado encontrado</td></tr>';
+                return;
+            }
+            
+            associatedData.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.Circo || 'N/A'}</td>
+                    <td>${item.Cidade || 'N/A'}</td>
+                    <td>${item['Data Evento'] || 'N/A'}</td>
+                    <td>${item['Faturamento Total'] || 'N/A'}</td>
+                    <td>${item['Faturamento Gestão Produtor'] || 'N/A'}</td>
+                    <td>${item['Taxas e Descontos'] || 'N/A'}</td>
+                    <td>${item['Valor Líquido'] || 'N/A'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            console.log(`Tabela de dados com cidades preenchida com ${associatedData.length} registros`);
+        }
+
+    </script>
+</body>
+</html>
