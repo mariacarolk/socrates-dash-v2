@@ -615,12 +615,21 @@ def get_circos_cidades():
     """Obter dados de circos e cidades"""
     try:
         circos_data = circos_manager.get_all()
+        
+        # Circos do relatório (se houver dados importados)
         circos_relatorio = processor.get_unique_circos() if processor.processed_data else []
+        
+        # Circos únicos do banco de dados (sempre disponível)
+        circos_banco = circos_manager.get_circos_unicos() if hasattr(circos_manager, 'get_circos_unicos') else []
+        
+        # Combinar circos do relatório + banco
+        todos_circos = list(set(circos_relatorio + circos_banco))
+        todos_circos.sort()
         
         return jsonify({
             'success': True,
             'circos_cidades': circos_data,
-            'circos_relatorio': circos_relatorio,
+            'circos_relatorio': todos_circos,  # Agora inclui circos do banco
             'total_registros': len(circos_data)
         })
     except Exception as e:
