@@ -532,10 +532,27 @@ def generate_report():
         if data_inicio > data_fim:
             return jsonify({'success': False, 'message': 'Data inicial deve ser anterior à data final'})
         
-        return jsonify({
-            'success': False, 
-            'message': 'Relatórios com dados reais disponíveis apenas na versão local. Esta é uma versão demo online.'
-        })
+        # Usar dados do cache para gerar relatórios reais
+        dados_para_relatorio = processor.processed_data if processor.processed_data else get_dados_from_cache()
+        
+        if not dados_para_relatorio:
+            return jsonify({'success': False, 'message': 'Importe um arquivo Excel primeiro para gerar relatórios'})
+        
+        # Simular processamento com dados reais do cache
+        processor.processed_data = dados_para_relatorio
+        
+        if tipo_filtro == 'circo':
+            selected_circos = data.get('circos', [])
+            if not selected_circos:
+                return jsonify({'success': False, 'message': 'Selecione pelo menos um circo'})
+            
+            report_data = processor.filter_and_generate_report(selected_circos, data_inicio, data_fim)
+        else:
+            selected_cidades = data.get('cidades', [])
+            if not selected_cidades:
+                return jsonify({'success': False, 'message': 'Selecione pelo menos uma cidade'})
+            
+            report_data = processor.filter_and_generate_report_by_cities(selected_cidades, data_inicio, data_fim)
         
         if not report_data:
             return jsonify({'success': False, 'message': 'Nenhum dado encontrado para os filtros selecionados'})
@@ -558,7 +575,7 @@ def generate_report():
                 'Valor Líquido': processor.format_currency_display(item['Valor Líquido'])
             })
         
-        # Resposta
+        # Resposta (SEM GRÁFICOS para produção)
         response_data = {
             'success': True,
             'data': display_data,
@@ -568,9 +585,10 @@ def generate_report():
                 'total_gestao': processor.format_currency_display(total_gestao),
                 'total_taxas': processor.format_currency_display(total_taxas),
                 'total_liquido': processor.format_currency_display(total_liquido),
-                'total_circos': len(report_data)
+                'total_circos': len(report_data),
+                'label_tipo': 'Cidades' if tipo_filtro == 'cidade' else 'Circos'
             },
-            'charts': {'pie': '{}', 'comparison': '{}'}  # Gráficos básicos
+            'charts': {'pie': '{}', 'comparison': '{}'}  # Gráficos vazios para produção
         }
         
         return jsonify(response_data)
