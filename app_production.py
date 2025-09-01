@@ -354,15 +354,7 @@ def create_excel_export(report_data):
     """Cria arquivo Excel para download"""
     output = io.BytesIO()
     
-    # Tentar usar xlsxwriter, senão usar openpyxl
-    try:
-        engine = 'xlsxwriter'
-        import xlsxwriter
-    except ImportError:
-        engine = 'openpyxl'
-        print("⚠️ xlsxwriter não disponível, usando openpyxl")
-    
-    with pd.ExcelWriter(output, engine=engine) as writer:
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         # Converter dados para DataFrame e calcular totais
         df_data = []
         total_faturamento = 0
@@ -416,45 +408,40 @@ def create_excel_export(report_data):
         # Escrever dados
         df.to_excel(writer, sheet_name='Relatório', index=False)
         
-        # Formatação específica para xlsxwriter
-        if engine == 'xlsxwriter':
-            # Obter workbook e worksheet
-            workbook = writer.book
-            worksheet = writer.sheets['Relatório']
-            
-            # Formatos
-            money_format = workbook.add_format({'num_format': 'R$ #,##0.00'})
-            header_format = workbook.add_format({'bold': True, 'bg_color': '#366092', 'font_color': 'white'})
-            total_format = workbook.add_format({'bold': True, 'bg_color': '#FFFF99', 'num_format': 'R$ #,##0.00'})
-            total_text_format = workbook.add_format({'bold': True, 'bg_color': '#FFFF99'})
-            
-            # Aplicar formatação no cabeçalho
-            for col_num, value in enumerate(df.columns.values):
-                worksheet.write(0, col_num, value, header_format)
-            
-            # Aplicar formatação monetária nas colunas de valores
-            for row_num in range(1, len(df)):
-                worksheet.write(row_num, 2, df.iloc[row_num-1]['Faturamento Total'], money_format)
-                worksheet.write(row_num, 3, df.iloc[row_num-1]['Faturamento Gestão Produtor'], money_format)
-                worksheet.write(row_num, 4, df.iloc[row_num-1]['Taxas e Descontos'], money_format)
-                worksheet.write(row_num, 5, df.iloc[row_num-1]['Valor Líquido'], money_format)
-            
-            # Formatação especial para linha de totais (última linha)
-            last_row = len(df)
-            worksheet.write(last_row, 0, 'TOTAL', total_text_format)
-            worksheet.write(last_row, 1, '', total_text_format)
-            worksheet.write(last_row, 2, total_faturamento, total_format)
-            worksheet.write(last_row, 3, total_gestao, total_format)
-            worksheet.write(last_row, 4, total_taxas, total_format)
-            worksheet.write(last_row, 5, total_liquido, total_format)
-            
-            # Ajustar largura das colunas
-            worksheet.set_column('A:A', 30)  # Circo/Cidade
-            worksheet.set_column('B:B', 25)  # Período
-            worksheet.set_column('C:F', 20)  # Valores
-        else:
-            # Para openpyxl, formatação básica
-            print("✅ Excel gerado com openpyxl (formatação básica)")
+        # Obter workbook e worksheet
+        workbook = writer.book
+        worksheet = writer.sheets['Relatório']
+        
+        # Formatos
+        money_format = workbook.add_format({'num_format': 'R$ #,##0.00'})
+        header_format = workbook.add_format({'bold': True, 'bg_color': '#366092', 'font_color': 'white'})
+        total_format = workbook.add_format({'bold': True, 'bg_color': '#FFFF99', 'num_format': 'R$ #,##0.00'})
+        total_text_format = workbook.add_format({'bold': True, 'bg_color': '#FFFF99'})
+        
+        # Aplicar formatação no cabeçalho
+        for col_num, value in enumerate(df.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+        
+        # Aplicar formatação monetária nas colunas de valores
+        for row_num in range(1, len(df)):
+            worksheet.write(row_num, 2, df.iloc[row_num-1]['Faturamento Total'], money_format)
+            worksheet.write(row_num, 3, df.iloc[row_num-1]['Faturamento Gestão Produtor'], money_format)
+            worksheet.write(row_num, 4, df.iloc[row_num-1]['Taxas e Descontos'], money_format)
+            worksheet.write(row_num, 5, df.iloc[row_num-1]['Valor Líquido'], money_format)
+        
+        # Formatação especial para linha de totais (última linha)
+        last_row = len(df)
+        worksheet.write(last_row, 0, 'TOTAL', total_text_format)
+        worksheet.write(last_row, 1, '', total_text_format)
+        worksheet.write(last_row, 2, total_faturamento, total_format)
+        worksheet.write(last_row, 3, total_gestao, total_format)
+        worksheet.write(last_row, 4, total_taxas, total_format)
+        worksheet.write(last_row, 5, total_liquido, total_format)
+        
+        # Ajustar largura das colunas
+        worksheet.set_column('A:A', 30)  # Circo/Cidade
+        worksheet.set_column('B:B', 25)  # Período
+        worksheet.set_column('C:F', 20)  # Valores
     
     output.seek(0)
     return output
@@ -485,113 +472,36 @@ def create_pdf_export(report_data):
     elements.append(Paragraph("Relatório Sócrates Online", title_style))
     elements.append(Spacer(1, 20))
     
-    # Preparar dados para tabela e calcular totais
+    # Preparar dados para tabela
     table_data = [['Circo/Cidade', 'Período', 'Faturamento Total', 'Faturamento Gestão', 'Taxas e Descontos', 'Valor Líquido']]
     
-    total_faturamento = 0
-    total_gestao = 0
-    total_taxas = 0
-    total_liquido = 0
-    
-    def format_currency(value):
-        """Formatar valor como moeda brasileira"""
-        if isinstance(value, (int, float)):
-            return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-        elif isinstance(value, str):
-            # Se já é string formatada, retornar como está
-            if 'R$' in value:
-                return value
-            # Se é string numérica, converter
-            try:
-                num_value = float(value.replace('.', '').replace(',', '.'))
-                return f"R$ {num_value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-            except:
-                return value
-        return str(value)
-    
     for item in report_data:
-        # Extrair valores numéricos para totais
-        fat_total = item.get('Faturamento Total', 0)
-        fat_gestao = item.get('Faturamento Gestão Produtor', 0)
-        taxas = item.get('Taxas e Descontos', 0)
-        val_liquido = item.get('Valor Líquido', 0)
-        
-        # Converter strings para números se necessário
-        if isinstance(fat_total, str):
-            try:
-                fat_total = float(re.sub(r'[^\d,]', '', fat_total.replace('.', '').replace(',', '.')))
-            except:
-                fat_total = 0
-        if isinstance(fat_gestao, str):
-            try:
-                fat_gestao = float(re.sub(r'[^\d,]', '', fat_gestao.replace('.', '').replace(',', '.')))
-            except:
-                fat_gestao = 0
-        if isinstance(taxas, str):
-            try:
-                taxas = float(re.sub(r'[^\d,]', '', taxas.replace('.', '').replace(',', '.')))
-            except:
-                taxas = 0
-        if isinstance(val_liquido, str):
-            try:
-                val_liquido = float(re.sub(r'[^\d,]', '', val_liquido.replace('.', '').replace(',', '.')))
-            except:
-                val_liquido = 0
-        
-        total_faturamento += fat_total
-        total_gestao += fat_gestao
-        total_taxas += taxas
-        total_liquido += val_liquido
-        
         table_data.append([
             item.get('Circo', ''),
             item.get('Período', ''),
-            format_currency(fat_total),
-            format_currency(fat_gestao),
-            format_currency(taxas),
-            format_currency(val_liquido)
+            item.get('Faturamento Total', ''),
+            item.get('Faturamento Gestão Produtor', ''),
+            item.get('Taxas e Descontos', ''),
+            item.get('Valor Líquido', '')
         ])
-    
-    # Adicionar linha de totais
-    table_data.append([
-        'TOTAL',
-        '',
-        format_currency(total_faturamento),
-        format_currency(total_gestao),
-        format_currency(total_taxas),
-        format_currency(total_liquido)
-    ])
     
     # Criar tabela
     table = Table(table_data, repeatRows=1)
     
     # Estilo da tabela
-    last_row_index = len(table_data) - 1
-    
     table.setStyle(TableStyle([
-        # Cabeçalho
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#366092')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        
-        # Dados
-        ('BACKGROUND', (0, 1), (-1, last_row_index-1), colors.beige),
-        ('FONTNAME', (0, 1), (-1, last_row_index-1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, last_row_index-1), 10),
-        ('ROWBACKGROUNDS', (0, 1), (-1, last_row_index-1), [colors.white, colors.HexColor('#f0f0f0')]),
-        
-        # Linha de totais
-        ('BACKGROUND', (0, last_row_index), (-1, last_row_index), colors.HexColor('#FFFF99')),
-        ('FONTNAME', (0, last_row_index), (-1, last_row_index), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, last_row_index), (-1, last_row_index), 11),
-        
-        # Geral
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),  # Alinhar valores à direita
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),  # Alinhar valores à direita
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')])
     ]))
     
     elements.append(table)
