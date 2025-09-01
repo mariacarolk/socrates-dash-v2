@@ -472,36 +472,113 @@ def create_pdf_export(report_data):
     elements.append(Paragraph("Relatório Sócrates Online", title_style))
     elements.append(Spacer(1, 20))
     
-    # Preparar dados para tabela
+    # Preparar dados para tabela e calcular totais
     table_data = [['Circo/Cidade', 'Período', 'Faturamento Total', 'Faturamento Gestão', 'Taxas e Descontos', 'Valor Líquido']]
     
+    total_faturamento = 0
+    total_gestao = 0
+    total_taxas = 0
+    total_liquido = 0
+    
+    def format_currency(value):
+        """Formatar valor como moeda brasileira"""
+        if isinstance(value, (int, float)):
+            return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        elif isinstance(value, str):
+            # Se já é string formatada, retornar como está
+            if 'R$' in value:
+                return value
+            # Se é string numérica, converter
+            try:
+                num_value = float(value.replace('.', '').replace(',', '.'))
+                return f"R$ {num_value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            except:
+                return value
+        return str(value)
+    
     for item in report_data:
+        # Extrair valores numéricos para totais
+        fat_total = item.get('Faturamento Total', 0)
+        fat_gestao = item.get('Faturamento Gestão Produtor', 0)
+        taxas = item.get('Taxas e Descontos', 0)
+        val_liquido = item.get('Valor Líquido', 0)
+        
+        # Converter strings para números se necessário
+        if isinstance(fat_total, str):
+            try:
+                fat_total = float(re.sub(r'[^\d,]', '', fat_total.replace('.', '').replace(',', '.')))
+            except:
+                fat_total = 0
+        if isinstance(fat_gestao, str):
+            try:
+                fat_gestao = float(re.sub(r'[^\d,]', '', fat_gestao.replace('.', '').replace(',', '.')))
+            except:
+                fat_gestao = 0
+        if isinstance(taxas, str):
+            try:
+                taxas = float(re.sub(r'[^\d,]', '', taxas.replace('.', '').replace(',', '.')))
+            except:
+                taxas = 0
+        if isinstance(val_liquido, str):
+            try:
+                val_liquido = float(re.sub(r'[^\d,]', '', val_liquido.replace('.', '').replace(',', '.')))
+            except:
+                val_liquido = 0
+        
+        total_faturamento += fat_total
+        total_gestao += fat_gestao
+        total_taxas += taxas
+        total_liquido += val_liquido
+        
         table_data.append([
             item.get('Circo', ''),
             item.get('Período', ''),
-            item.get('Faturamento Total', ''),
-            item.get('Faturamento Gestão Produtor', ''),
-            item.get('Taxas e Descontos', ''),
-            item.get('Valor Líquido', '')
+            format_currency(fat_total),
+            format_currency(fat_gestao),
+            format_currency(taxas),
+            format_currency(val_liquido)
         ])
+    
+    # Adicionar linha de totais
+    table_data.append([
+        'TOTAL',
+        '',
+        format_currency(total_faturamento),
+        format_currency(total_gestao),
+        format_currency(total_taxas),
+        format_currency(total_liquido)
+    ])
     
     # Criar tabela
     table = Table(table_data, repeatRows=1)
     
     # Estilo da tabela
+    last_row_index = len(table_data) - 1
+    
     table.setStyle(TableStyle([
+        # Cabeçalho
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#366092')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('FONTSIZE', (0, 0), (-1, 0), 12),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        
+        # Dados
+        ('BACKGROUND', (0, 1), (-1, last_row_index-1), colors.beige),
+        ('FONTNAME', (0, 1), (-1, last_row_index-1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, last_row_index-1), 10),
+        ('ROWBACKGROUNDS', (0, 1), (-1, last_row_index-1), [colors.white, colors.HexColor('#f0f0f0')]),
+        
+        # Linha de totais
+        ('BACKGROUND', (0, last_row_index), (-1, last_row_index), colors.HexColor('#FFFF99')),
+        ('FONTNAME', (0, last_row_index), (-1, last_row_index), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, last_row_index), (-1, last_row_index), 11),
+        
+        # Geral
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),  # Alinhar valores à direita
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f0f0f0')])
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
     ]))
     
     elements.append(table)
